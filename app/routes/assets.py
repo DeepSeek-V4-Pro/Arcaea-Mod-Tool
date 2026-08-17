@@ -8,7 +8,7 @@ import uuid
 import zipfile
 import zlib
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 
 from core.catalog import find_entry
@@ -72,8 +72,13 @@ def asset_raw(path: str, range: str | None = None, state: AppState = Depends(get
 
 
 @router.get("/api/asset/thumb")
-def asset_thumb(path: str, max: int = 256, state: AppState = Depends(get_state)):
-    """图片缩略图(JPEG,磁盘缓存)。"""
+def asset_thumb(request: Request, path: str, max: int = 256,
+                state: AppState = Depends(get_state)):
+    """图片缩略图(JPEG,磁盘缓存 + ETag 条件请求)。
+
+    注意:URL 长期不变(路径+max),若带长 max-age 缓存,后端更换生成规则后
+    浏览器会一直命中旧图;这里用 no-cache + ETag,304 开销极小且永远新鲜。
+    """
     from PIL import Image
 
     p = need_apk(state)
@@ -81,7 +86,7 @@ def asset_thumb(path: str, max: int = 256, state: AppState = Depends(get_state))
     if e is None or os.path.splitext(path)[1].lower() not in THUMB_EXTS:
         raise HTTPException(404)
     os.makedirs(app_config.THUMB_DIR, exist_ok=True)
-    # v3: 缩略图透明区从浅青底改为纯白底,旧缓存作废
+    # v3: 缩略图透明区为纯白底
     key = f"v3-{len(path)}-{path}-{e.usize}-{max}".replace("/", "_")
     cache = os.path.join(app_config.THUMB_DIR, key + ".jpg")
     if not os.path.exists(cache):
@@ -96,8 +101,13 @@ def asset_thumb(path: str, max: int = 256, state: AppState = Depends(get_state))
         elif img.mode not in ("RGB", "L"):
             img = img.convert("RGB")
         img.save(cache, "JPEG", quality=82)
-    return FileResponse(cache, media_type="image/jpeg",
-                        headers={"Cache-Control": "public, max-age=86400"})
+    etag = f'"{os.path.getmtime(cache):.0f}-{os.path.getsize(cache)}"'
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304)
+    return FileResponse(cache, media_type="image/jpeg", headers={
+        "Cache-Control": "public, max-age=0, must-revalidate",
+        "ETag": etag,
+    })
 
 
 @router.get("/api/asset/text")
