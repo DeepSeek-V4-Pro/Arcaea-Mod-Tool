@@ -11,6 +11,11 @@ const asset = computed(() => store.assets.find((a) => a.path === store.selected)
 
 const patch = computed(() => (store.selected ? store.patches[store.selected] : null))
 const subLabel = computed(() => asset.value ? (store.subLabels[asset.value.sub] || asset.value.sub) : '')
+/* 角色名:char_id -> {name, label} */
+const charInfo = computed(() => {
+  if (!asset.value?.char_id) return null
+  return store.charNames[asset.value.char_id] || null
+})
 
 /* ------------------------------------------------ 图片替换对话框(组件内局部状态) */
 
@@ -195,7 +200,12 @@ watch(() => store.incoming, consumeIncoming)
     <template v-else>
       <div class="pv-title">{{ asset.path }}</div>
       <div class="pv-meta">
-        {{ asset.human_size }} · {{ subLabel }}<span v-if="patch" style="color:var(--accent)"> · 已替换</span>
+        {{ asset.human_size }} · {{ subLabel }}
+        <template v-if="charInfo">
+          · 角色 {{ asset.char_id }} {{ charInfo.label }}
+          <span v-if="charInfo.name">({{ charInfo.name }})</span>
+        </template>
+        <span v-if="patch" style="color:var(--accent)"> · 已替换</span>
       </div>
 
       <!-- 同角色素材联动 -->

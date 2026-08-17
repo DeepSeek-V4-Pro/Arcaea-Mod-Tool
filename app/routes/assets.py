@@ -8,7 +8,8 @@ import os
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, Response
 
-from core.catalog import find_entry, read_asset
+from core.catalog import find_entry
+from core.zipio import read_entry_data
 
 from .. import config as app_config
 from ..deps import get_state, need_apk
@@ -51,7 +52,7 @@ def asset_raw(path: str, range: str | None = None, state: AppState = Depends(get
             raise HTTPException(416)
     if start > end or start >= total:
         raise HTTPException(416)
-    data = read_asset(p, path)
+    data = read_entry_data(p, e)
     if data is None:
         raise HTTPException(404)
     chunk = data[start:end + 1]
@@ -77,13 +78,19 @@ def asset_thumb(path: str, max: int = 256, state: AppState = Depends(get_state))
     if e is None or os.path.splitext(path)[1].lower() not in THUMB_EXTS:
         raise HTTPException(404)
     os.makedirs(app_config.THUMB_DIR, exist_ok=True)
-    key = f"{len(path)}-{path}-{e.usize}-{max}".replace("/", "_")
+    # v2: 缩略图从黑底改为浅色底合成,旧缓存作废
+    key = f"v2-{len(path)}-{path}-{e.usize}-{max}".replace("/", "_")
     cache = os.path.join(app_config.THUMB_DIR, key + ".jpg")
     if not os.path.exists(cache):
-        data = read_asset(p, path)
+        data = read_entry_data(p, e)
         img = Image.open(io.BytesIO(data))
         img.thumbnail((max, max), Image.LANCZOS)
-        if img.mode not in ("RGB", "L"):
+        if img.mode == "RGBA":
+            # 透明 PNG:合成到浅色底,避免转 RGB 时黑底
+            bg = Image.new("RGB", img.size, (244, 250, 251))
+            bg.paste(img, mask=img.split()[3])
+            img = bg
+        elif img.mode not in ("RGB", "L"):
             img = img.convert("RGB")
         img.save(cache, "JPEG", quality=82)
     return FileResponse(cache, media_type="image/jpeg",
@@ -97,7 +104,7 @@ def asset_text(path: str, limit: int = 200000, state: AppState = Depends(get_sta
     e = find_entry(p, path)
     if e is None:
         raise HTTPException(404)
-    data = read_asset(p, path)
+    data = read_entry_data(p, e)
     try:
         text = data[:limit].decode("utf-8", errors="replace")
     except Exception:

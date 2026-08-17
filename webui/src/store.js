@@ -13,6 +13,7 @@ export const store = reactive({
   subLabels: {},
   formLabels: {},
   formOrder: [],
+  charNames: {},            // char_id -> {name, label, search}
 
   // 视图状态
   filter: { sub: null, search: '' },
@@ -57,6 +58,7 @@ export async function loadCatalog() {
   store.subs.forEach((s) => { store.subLabels[s.id] = s.label })
   store.formLabels = cat.form_labels || {}
   store.formOrder = cat.form_order || []
+  store.charNames = cat.char_names || {}
   store.page = 1
 }
 

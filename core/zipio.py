@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import struct
+import threading
 import time
 import zlib
 from dataclasses import dataclass, field
@@ -83,7 +84,30 @@ def _parse_extra(extra: bytes) -> dict:
 
 
 def read_central_directory(apk_path: str) -> tuple[list[Entry], bytes, bytes]:
-    """Parse the central directory. Returns (entries, central_dir_bytes, eocd_bytes)."""
+    """Parse the central directory. Returns (entries, central_dir_bytes, eocd_bytes).
+
+    Results are cached in memory keyed by (path, mtime, size):素材浏览会产生大量
+    逐条读取请求(缩略图等),每次全量解析 7k+ 条目录会拖垮服务,缓存后接近零开销。
+    """
+    st = os.stat(apk_path)
+    key = (st.st_mtime_ns, st.st_size)
+    cached = _cd_state["cache"]
+    if cached is not None and cached["path"] == apk_path and cached["key"] == key:
+        return cached["entries"], cached["cd"], cached["eocd"]
+    entries, cd_raw, eocd_bytes = _parse_central_directory(apk_path)
+    with _cd_lock:
+        _cd_state["cache"] = {
+            "path": apk_path, "key": key,
+            "entries": entries, "cd": cd_raw, "eocd": eocd_bytes,
+        }
+    return entries, cd_raw, eocd_bytes
+
+
+_cd_state: dict = {"cache": None}
+_cd_lock = threading.Lock()
+
+
+def _parse_central_directory(apk_path: str) -> tuple[list[Entry], bytes, bytes]:
     with open(apk_path, "rb") as f:
         f.seek(0, os.SEEK_END)
         file_size = f.tell()

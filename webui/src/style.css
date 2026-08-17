@@ -126,6 +126,9 @@ section#browser{
   flex:1;overflow-y:auto;padding:12px;display:grid;
   grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
   gap:12px;align-content:start;
+  /* 修复 Chromium 布局坑:grid 项带 overflow:hidden 时 stretch 会把行轨道压成 0,
+     卡片内容全部被裁剪(表现为 2px 细线);改为 start 后行高由内容决定 */
+  align-items:start;
 }
 .card{
   background:#fff;border:1px solid var(--line);border-radius:12px;
@@ -149,6 +152,10 @@ section#browser{
   font-size:10px;padding:1px 7px;border-radius:6px;font-weight:600;
 }
 .card.dragover{border-color:var(--ok);box-shadow:0 0 0 2px rgba(16,185,129,.4)}
+/* 不支持 aspect-ratio 的浏览器:显式给图片占位高度,避免卡片塌成细线 */
+@supports not (aspect-ratio: 1) {
+  .card .thumb, .card .icon { height: 160px; }
+}
 .empty{grid-column:1/-1;text-align:center;color:var(--dim);padding:40px}
 /* 角色分组头 */
 .group-head{

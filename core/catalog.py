@@ -17,6 +17,7 @@ even for a 1.8GB APK. Sub-category rules follow the actual Arcaea layout:
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from dataclasses import dataclass
@@ -79,9 +80,9 @@ def char_info(path: str) -> tuple[str, str] | None:
     name = parts[-1]
     base = name[:-4] if name.endswith((".png", ".jpg", ".jpeg")) else name
     if len(parts) >= 2 and parts[0] == "1080":
-        m = re.match(r"^(\d+)([a-z]?)$", base)
+        m = re.match(r"^(-?\d+)([a-z]?)$", base)
         return (m.group(1), "hd") if m else (None, "hd")
-    m = re.match(r"^(\d+)([a-z]*)_(mp|icon)$", base)
+    m = re.match(r"^(-?\d+)([a-z]*)_(mp|icon)$", base)
     if not m:
         return (None, "special")
     cid, suf, kind = m.group(1), m.group(2), m.group(3)
@@ -148,6 +149,54 @@ def _fmt(n: int) -> str:
     return f"{n} B"
 
 
+CHAR_NAMES_FILE = "assets/char/characters.json"
+_HAN_RANGE = range(0x4E00, 0x9FFF + 1)
+# 简体中文特征字:用于从多语言名称串里挑出简体中文(Arcaea 名称场景足够覆盖)
+_SIMPLIFIED_MARKERS = "对红调梦丝爱丽忆体图国时后现发门问线纸点华际车东乐习马头凤办从双认让议论记许设访证词语说读课讲诗诚谢识谱"
+
+
+def _pick_display_name(search: list[str]) -> str:
+    """从多语言搜索串里挑显示名(优先简体中文)。
+
+    search_strings 大致为 [日文/简体/繁体/假名/韩文];简体优先策略:
+    对每个含汉字串统计简体特征字数量,取分最高者,并列取靠前者。
+    """
+    han = [(i, s) for i, s in enumerate(search) if any(ord(ch) in _HAN_RANGE for ch in s)]
+    if not han:
+        return search[0] if search else ""
+    best_s, best_score = han[0][1], -1
+    for _i, s in han:
+        score = sum(1 for ch in s if ch in _SIMPLIFIED_MARKERS)
+        if score > best_score:
+            best_s, best_score = s, score
+    return best_s
+
+
+def load_char_names(apk_path: str, entries) -> dict:
+    """char_id(str) -> {"name": 罗马音, "label": 显示名, "search": 全部搜索串}。
+
+    数据来自 APK 内 assets/char/characters.json;文件缺失或解析失败时返回空表。
+    """
+    char_names: dict = {}
+    for e in entries:
+        if e.name != CHAR_NAMES_FILE:
+            continue
+        try:
+            data = json.loads(read_entry_data(apk_path, e).decode("utf-8"))
+            for c in data:
+                search = c.get("search_strings") or []
+                cid = str(c.get("character_id"))
+                char_names[cid] = {
+                    "name": c.get("name", ""),
+                    "label": _pick_display_name(search),
+                    "search": search,
+                }
+        except Exception:
+            pass
+        break
+    return char_names
+
+
 def build_catalog(apk_path: str) -> dict:
     entries, _cd, _eocd = read_central_directory(apk_path)
     assets = []
@@ -181,6 +230,7 @@ def build_catalog(apk_path: str) -> dict:
                  if sub_counts.get(sid)],
         "form_labels": FORM_LABELS,
         "form_order": FORM_ORDER,
+        "char_names": load_char_names(apk_path, entries),
         "assets": [a.__dict__ for a in assets],
     }
 

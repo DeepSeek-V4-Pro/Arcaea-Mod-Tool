@@ -47,6 +47,10 @@ const charGroups = computed(() => {
     })
     .map((id) => ({
       id,
+      label: store.charNames[id]?.label || '',
+      fullName: store.charNames[id]
+        ? (store.charNames[id].label + (store.charNames[id].name ? ' (' + store.charNames[id].name + ')' : ''))
+        : '',
       items: groups[id].sort((x, y) => {
         const fx = store.formOrder.indexOf(x.form)
         const fy = store.formOrder.indexOf(y.form)
@@ -132,8 +136,9 @@ async function onDropFile(asset, file) {
   <div id="grid">
     <template v-if="isChar">
       <template v-for="g in charGroups" :key="g.id">
-        <div class="group-head">
-          角色 {{ g.id }}<span class="cnt">{{ g.items.length }} 张</span>
+        <div class="group-head" :title="g.fullName">
+          角色 {{ g.id }}<template v-if="g.label"> · {{ g.label }}</template>
+          <span class="cnt">{{ g.items.length }} 张</span>
         </div>
         <AssetCard v-for="a in g.items" :key="a.path" :asset="a" @drop-file="onDropFile" />
       </template>
