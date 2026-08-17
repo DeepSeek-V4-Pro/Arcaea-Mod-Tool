@@ -1,15 +1,17 @@
-"""素材路由:目录扫描、目录缓存、原始/缩略图/文本读取。"""
+"""素材路由:目录扫描、目录缓存、原始/缩略图/文本读取、素材导出。"""
 
 from __future__ import annotations
 
 import io
 import os
+import uuid
+import zipfile
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import FileResponse, Response
 
 from core.catalog import find_entry
-from core.zipio import read_entry_data
+from core.zipio import read_central_directory, read_entry_data
 
 from .. import config as app_config
 from ..deps import get_state, need_apk
@@ -110,3 +112,44 @@ def asset_text(path: str, limit: int = 200000, state: AppState = Depends(get_sta
     except Exception:
         text = ""
     return {"path": path, "size": len(data), "text": text, "truncated": len(data) > limit}
+
+
+# ------------------------------------------------------------------ 素材导出
+
+@router.get("/api/asset/download")
+def asset_download(path: str, state: AppState = Depends(get_state)):
+    """单个素材下载(附件形式)。"""
+    p = need_apk(state)
+    e = find_entry(p, path)
+    if e is None:
+        raise HTTPException(404, f"条目不存在: {path}")
+    data = read_entry_data(p, e)
+    fname = os.path.basename(path) or "asset.bin"
+    return Response(data, media_type=guess_mime(path), headers={
+        "Content-Disposition": f'attachment; filename="{fname}"',
+    })
+
+
+@router.post("/api/assets/export")
+def assets_export(body: dict, background_tasks: BackgroundTasks,
+                  state: AppState = Depends(get_state)):
+    """批量导出:按素材路径列表打包 zip(保留 APK 内路径结构)。"""
+    paths = body.get("paths") or []
+    if not paths:
+        raise HTTPException(400, "没有要导出的素材")
+    p = need_apk(state)
+    entry_map = {e.name: e for e in read_central_directory(p)[0]}
+    missing = [x for x in paths if x not in entry_map]
+    if missing:
+        raise HTTPException(400, f"{len(missing)} 个素材不存在,如: {missing[0]}")
+
+    export_dir = os.path.join(app_config.DATA_DIR, "export")
+    os.makedirs(export_dir, exist_ok=True)
+    tmp = os.path.join(export_dir, f"assets_{uuid.uuid4().hex[:8]}.zip")
+    # 素材多为已压缩格式(png/jpg),直接存储避免无谓压缩
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED) as z:
+        for name in paths:
+            z.writestr(name, read_entry_data(p, entry_map[name]))
+    background_tasks.add_task(os.remove, tmp)
+    return FileResponse(tmp, media_type="application/zip",
+                        headers={"Content-Disposition": 'attachment; filename="arcaea_assets.zip"'})

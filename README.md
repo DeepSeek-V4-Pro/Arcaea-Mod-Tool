@@ -101,23 +101,35 @@ webui/
 ├── vite.config.js      # 开发代理 / 构建 base 配置
 └── src/
     ├── main.js         # 挂载入口
-    ├── App.vue         # 布局外壳(头部/侧栏/素材区/面板)
+    ├── App.vue         # 外壳:页面导航(解包/替换) + 配置弹窗
     ├── api.js          # fetch 封装
-    ├── store.js        # 全局响应式状态(目录/补丁/构建)
-    ├── toast.js        # 全局提示
+    ├── store.js        # 全局响应式状态(页面/目录/补丁/构建)
+    ├── toast.js        # 全局提示(ok/err/warn 堆叠)
     ├── utils.js        # 工具函数
     ├── style.css       # 全局样式(暂保持浅色主题)
+    ├── pages/
+    │   ├── ExtractPage.vue  # 解包页(初始):素材浏览/预览/导出
+    │   └── ReplacePage.vue  # 替换页:补丁清单确认 → 构建导出新包
     └── components/
-        ├── AppHeader.vue   # 头部:状态/扫描/补丁包
+        ├── AppHeader.vue   # 头部:页面导航/状态/扫描/配置
         ├── Sidebar.vue     # 搜索 + 分类
-        ├── AssetGrid.vue   # 工具栏 + 素材网格(分页/角色分组)
+        ├── AssetGrid.vue   # 工具栏(导出/排序/分页) + 素材网格
         ├── AssetCard.vue   # 素材卡片(拖放替换)
-        ├── DetailPanel.vue # 素材详情/图片处理/文本编辑
+        ├── DetailPanel.vue # 素材详情/导出/图片处理/文本编辑
         ├── Dropzone.vue    # 通用拖放区
-        ├── BuildPanel.vue  # 构建进度与日志
-        ├── ConfigPanel.vue # 配置
+        ├── PatchList.vue   # 替换清单(勾选启用/导入导出补丁包)
+        ├── PatchDetail.vue # 补丁对比预览(原素材 vs 替换内容)
+        ├── BuildPanel.vue  # 构建进度/日志/下载 APK
+        ├── ConfigDialog.vue# 配置弹窗
         └── ToastHost.vue   # 全局提示
 ```
+
+后端 API 补充:
+
+- `GET  /api/asset/download?path=`      单个素材下载
+- `POST /api/assets/export`             按路径列表批量导出 zip(body: {"paths": [...]})
+- `POST /api/patch/enabled`             启用/停用补丁(停用的不参与构建)
+- `GET  /api/output/download?path=`     下载构建产物(限输出目录内)
 
 ## 说明
 

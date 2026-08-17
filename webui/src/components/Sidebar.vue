@@ -5,14 +5,14 @@ import { store } from '../store'
 
 const search = computed({
   get: () => store.filter.search,
-  set: (v) => { store.filter.search = v; store.page = 1 },
+  set: (v) => { store.filter.search = v; store.gridPage = 1 },
 })
 
 const counts = computed(() => store.catalog?.sub_counts || {})
 
 function pick(sub) {
   store.filter.sub = sub
-  store.page = 1
+  store.gridPage = 1
 }
 </script>
 
@@ -32,3 +32,4 @@ function pick(sub) {
     </div>
   </aside>
 </template>
+

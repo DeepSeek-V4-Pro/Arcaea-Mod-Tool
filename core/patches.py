@@ -80,10 +80,19 @@ class PatchStore:
             "note": (meta or {}).get("note", ""),
             "ts": time.time(),
             "settings": (meta or {}).get("settings", {}),
+            "enabled": True,
         }
         self._meta[path] = entry
         self._save()
         return {**entry, "path": path, "size": len(data)}
+
+    def set_enabled(self, path: str, enabled: bool) -> bool:
+        """启用/停用补丁(停用的不参与构建)。"""
+        if path not in self._meta:
+            return False
+        self._meta[path]["enabled"] = bool(enabled)
+        self._save()
+        return True
 
     def put_text(self, path: str, text: str) -> dict:
         return self.put_bytes(path, text.encode("utf-8"), {

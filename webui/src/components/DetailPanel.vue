@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
 import { api } from '../api'
-import { refreshPatches, removePatch, store, uploadPatch } from '../store'
+import { downloadAsset, refreshPatches, removePatch, store, uploadPatch } from '../store'
 import { showToast } from '../toast'
 import { b64toBlob, debounce, enc, fmtSize, isImageName, readFileAsDataURL } from '../utils'
 import Dropzone from './Dropzone.vue'
@@ -16,6 +16,22 @@ const charInfo = computed(() => {
   if (!asset.value?.char_id) return null
   return store.charNames[asset.value.char_id] || null
 })
+
+/* ------------------------------------------------ 素材导出 */
+
+const exporting = ref(false)
+
+async function onDownload() {
+  if (!asset.value) return
+  exporting.value = true
+  try {
+    await downloadAsset(asset.value.path)
+    showToast('已开始下载')
+  } catch (e) {
+    showToast('导出失败: ' + e.message, 'err')
+  }
+  exporting.value = false
+}
 
 /* ------------------------------------------------ 图片替换对话框(组件内局部状态) */
 
@@ -77,9 +93,9 @@ async function applyImage() {
   try {
     await uploadPatch(asset.value.path, file, JSON.stringify(settings))
     closeImageDialog()
-    showToast(`已替换: ${asset.value.path.split('/').pop()}`)
+    showToast(`已加入替换清单: ${asset.value.path.split('/').pop()}`)
   } catch (e) {
-    showToast('替换失败: ' + e.message, true)
+    showToast('替换失败: ' + e.message, 'err')
   }
 }
 
@@ -92,14 +108,14 @@ async function handleFile(file) {
       const dataUrl = await readFileAsDataURL(file)
       openImageDialog(file.name, dataUrl)
     } catch (e) {
-      showToast('读取文件失败: ' + e.message, true)
+      showToast('读取文件失败: ' + e.message, 'err')
     }
   } else {
     try {
       await uploadPatch(asset.value.path, file, '{}')
-      showToast(`已替换: ${asset.value.path.split('/').pop()}`)
+      showToast(`已加入替换清单: ${asset.value.path.split('/').pop()}`)
     } catch (e) {
-      showToast('替换失败: ' + e.message, true)
+      showToast('替换失败: ' + e.message, 'err')
     }
   }
 }
@@ -145,7 +161,7 @@ async function saveText() {
     await refreshPatches()
     showToast('文本补丁已保存')
   } catch (e) {
-    showToast('保存失败: ' + e.message, true)
+    showToast('保存失败: ' + e.message, 'err')
   }
 }
 
@@ -160,9 +176,16 @@ async function onRemovePatch() {
     await removePatch(asset.value.path)
     showToast('已恢复原素材')
   } catch (e) {
-    showToast('移除失败: ' + e.message, true)
+    showToast('移除失败: ' + e.message, 'err')
   }
   removing.value = false
+}
+
+/* 跳转替换页并选中当前补丁 */
+function gotoReplace() {
+  if (!asset.value) return
+  store.selPatch = asset.value.path
+  store.page = 'replace'
 }
 
 /* ------------------------------------------------ 同角色跳转 */
@@ -206,6 +229,13 @@ watch(() => store.incoming, consumeIncoming)
           <span v-if="charInfo.name">({{ charInfo.name }})</span>
         </template>
         <span v-if="patch" style="color:var(--accent)"> · 已替换</span>
+      </div>
+
+      <div class="pv-actions">
+        <button class="btn ghost small" :disabled="exporting" @click="onDownload">
+          {{ exporting ? '导出中…' : '导出此素材' }}
+        </button>
+        <button v-if="patch" class="btn ghost small" @click="gotoReplace">前往「替换」页管理</button>
       </div>
 
       <!-- 同角色素材联动 -->

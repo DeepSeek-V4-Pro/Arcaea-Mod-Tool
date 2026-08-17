@@ -26,7 +26,6 @@ function onDrop(e) {
 
 function select() {
   store.selected = props.asset.path
-  store.tab = 'detail'
 }
 </script>
 

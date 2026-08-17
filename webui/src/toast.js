@@ -1,18 +1,17 @@
-/* 全局 toast 状态 */
+/* 全局 toast:多态(ok/err/warn)堆叠展示,最多保留 4 条 */
 
 import { reactive } from 'vue'
 
-export const toast = reactive({
-  msg: '',
-  isErr: false,
-  visible: false,
-  _timer: null,
-})
+export const toasts = reactive([])  // [{id, msg, kind}]
 
-export function showToast(msg, isErr = false) {
-  toast.msg = msg
-  toast.isErr = isErr
-  toast.visible = true
-  clearTimeout(toast._timer)
-  toast._timer = setTimeout(() => { toast.visible = false }, 4000)
+let _seq = 0
+
+export function showToast(msg, kind = 'ok') {
+  const id = ++_seq
+  toasts.push({ id, msg, kind })
+  if (toasts.length > 4) toasts.shift()
+  setTimeout(() => {
+    const i = toasts.findIndex((t) => t.id === id)
+    if (i >= 0) toasts.splice(i, 1)
+  }, 4000)
 }

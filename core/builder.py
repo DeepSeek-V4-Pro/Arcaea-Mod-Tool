@@ -57,8 +57,8 @@ def run_build(job: BuildJob, apk_path: str, output_dir: str, patches: PatchStore
     try:
         job.update(state="running", log="开始构建…")
 
-        # collect replacements
-        items = patches.list()
+        # collect replacements(只收集启用状态的补丁)
+        items = [it for it in patches.list() if it.get("enabled", True)]
         replace = {}
         for it in items:
             data = patches.get_bytes(it["path"])
@@ -66,7 +66,7 @@ def run_build(job: BuildJob, apk_path: str, output_dir: str, patches: PatchStore
                 continue
             replace[it["path"]] = data
         if not replace:
-            raise RuntimeError("没有已保存的替换内容（补丁列表为空）")
+            raise RuntimeError("没有已启用(勾选)的替换内容")
 
         job.update(log=f"共 {len(replace)} 个替换条目")
 

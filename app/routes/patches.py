@@ -70,6 +70,16 @@ def delete_patch(path: str, state: AppState = Depends(get_state)):
     return {"ok": True}
 
 
+@router.post("/api/patch/enabled")
+def patch_enabled(body: dict, state: AppState = Depends(get_state)):
+    """启用/停用补丁(停用的不参与构建)。"""
+    path = body.get("path", "")
+    ok = state.patches.set_enabled(path, bool(body.get("enabled", True)))
+    if not ok:
+        raise HTTPException(404, "补丁不存在")
+    return {"ok": True}
+
+
 @router.get("/api/patch/bytes")
 def patch_bytes(path: str, state: AppState = Depends(get_state)):
     data = state.patches.get_bytes(path)

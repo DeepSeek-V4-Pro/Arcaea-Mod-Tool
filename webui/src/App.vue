@@ -1,15 +1,15 @@
 <script setup>
-import { onBeforeUnmount, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { api } from './api'
 import { loadCatalog, refreshPatches, setStatus, store } from './store'
 import AppHeader from './components/AppHeader.vue'
-import Sidebar from './components/Sidebar.vue'
-import AssetGrid from './components/AssetGrid.vue'
-import DetailPanel from './components/DetailPanel.vue'
-import BuildPanel from './components/BuildPanel.vue'
-import ConfigPanel from './components/ConfigPanel.vue'
+import ExtractPage from './pages/ExtractPage.vue'
+import ReplacePage from './pages/ReplacePage.vue'
+import ConfigDialog from './components/ConfigDialog.vue'
 import ToastHost from './components/ToastHost.vue'
+
+const showConfig = ref(false)
 
 async function init() {
   try {
@@ -31,25 +31,12 @@ onBeforeUnmount(() => { store.incoming = null })
 <template>
   <!-- 根容器拦截拖放,防止文件误落到空白处触发浏览器跳转 -->
   <div id="app" @dragover.prevent @drop.prevent>
-    <AppHeader />
+    <AppHeader @open-config="showConfig = true" />
     <main>
-      <Sidebar />
-      <section id="browser">
-        <AssetGrid />
-      </section>
-      <section id="panel">
-        <div class="tabs">
-          <button :class="{ active: store.tab === 'detail' }" @click="store.tab = 'detail'">素材详情</button>
-          <button :class="{ active: store.tab === 'build' }" @click="store.tab = 'build'">构建</button>
-          <button :class="{ active: store.tab === 'config' }" @click="store.tab = 'config'">配置</button>
-        </div>
-        <div class="body">
-          <DetailPanel v-if="store.tab === 'detail'" />
-          <BuildPanel v-else-if="store.tab === 'build'" />
-          <ConfigPanel v-else />
-        </div>
-      </section>
+      <ExtractPage v-if="store.page === 'extract'" />
+      <ReplacePage v-else />
     </main>
+    <ConfigDialog v-if="showConfig" @close="showConfig = false" />
     <ToastHost />
   </div>
 </template>

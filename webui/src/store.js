@@ -1,11 +1,15 @@
-/* 全局状态仓库:目录、补丁、视图状态、构建任务 */
+/* 全局状态仓库:页面导航、素材目录、补丁、构建任务 */
 
 import { reactive } from 'vue'
 
 import { api } from './api'
+import { downloadBlob } from './utils'
 import { showToast } from './toast'
 
 export const store = reactive({
+  // 页面导航:extract(解包页) | replace(替换页)
+  page: 'extract',
+
   // 素材目录
   catalog: null,
   assets: [],
@@ -15,16 +19,18 @@ export const store = reactive({
   formOrder: [],
   charNames: {},            // char_id -> {name, label, search}
 
-  // 视图状态
+  // 解包页视图状态
   filter: { sub: null, search: '' },
   selected: null,           // 当前选中的素材路径
   sort: 'path',             // path | size_asc | size_desc
   perPage: 20,
-  page: 1,
-  tab: 'detail',            // detail | build | config
+  gridPage: 1,              // 素材网格分页页码
+
+  // 替换页视图状态
+  selPatch: null,           // 当前选中的补丁路径
 
   // 补丁
-  patches: {},              // path -> patch meta
+  patches: {},              // path -> patch meta(含 enabled)
 
   // 配置
   cfgApk: '',
@@ -59,7 +65,7 @@ export async function loadCatalog() {
   store.formLabels = cat.form_labels || {}
   store.formOrder = cat.form_order || []
   store.charNames = cat.char_names || {}
-  store.page = 1
+  store.gridPage = 1
 }
 
 export async function scan() {
@@ -74,6 +80,7 @@ export async function refreshPatches() {
   const list = await api('/api/patches')
   store.patches = {}
   list.forEach((p) => { store.patches[p.path] = p })
+  if (store.selPatch && !store.patches[store.selPatch]) store.selPatch = null
 }
 
 export async function uploadPatch(path, file, settingsJson) {
@@ -88,6 +95,54 @@ export async function uploadPatch(path, file, settingsJson) {
 export async function removePatch(path) {
   await api('/api/patch?path=' + encodeURIComponent(path), { method: 'DELETE' })
   await refreshPatches()
+}
+
+export async function setPatchEnabled(path, enabled) {
+  await api('/api/patch/enabled', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ path, enabled }),
+  })
+  if (store.patches[path]) store.patches[path].enabled = enabled
+}
+
+/* ---------------------------------------------------------------- export */
+
+/** 批量导出素材 zip(当前筛选结果等)。 */
+export async function exportAssetsZip(paths) {
+  const r = await fetch('/api/assets/export', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ paths }),
+  })
+  if (!r.ok) {
+    let msg = r.statusText
+    try { msg = (await r.json()).detail || msg } catch (e) { /* keep */ }
+    throw new Error(msg)
+  }
+  downloadBlob(await r.blob(), 'arcaea_assets.zip')
+}
+
+/** 下载单个素材。 */
+export async function downloadAsset(path) {
+  const r = await fetch('/api/asset/download?path=' + encodeURIComponent(path))
+  if (!r.ok) {
+    let msg = r.statusText
+    try { msg = (await r.json()).detail || msg } catch (e) { /* keep */ }
+    throw new Error(msg)
+  }
+  downloadBlob(await r.blob(), path.split('/').pop() || 'asset.bin')
+}
+
+/** 下载构建产物 mod APK。 */
+export async function downloadBuildOutput(path) {
+  const r = await fetch('/api/output/download?path=' + encodeURIComponent(path))
+  if (!r.ok) {
+    let msg = r.statusText
+    try { msg = (await r.json()).detail || msg } catch (e) { /* keep */ }
+    throw new Error(msg)
+  }
+  downloadBlob(await r.blob(), path.split('/').pop() || 'mod.apk')
 }
 
 /* ---------------------------------------------------------------- build */
@@ -132,3 +187,4 @@ export async function importPack(file) {
   await refreshPatches()
   showToast(`导入 ${r.imported} 个补丁`)
 }
+
