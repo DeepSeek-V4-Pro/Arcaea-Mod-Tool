@@ -25,6 +25,7 @@ export const store = reactive({
   sort: 'path',             // path | size_asc | size_desc
   perPage: 20,
   gridPage: 1,              // 素材网格分页页码
+  exportSel: [],            // 勾选待导出的素材路径列表
 
   // 替换页视图状态
   selPatch: null,           // 当前选中的补丁路径

@@ -5,6 +5,14 @@ import { exportAssetsZip, store, uploadPatch } from '../store'
 import { showToast } from '../toast'
 import { isImageName, readFileAsDataURL } from '../utils'
 import AssetCard from './AssetCard.vue'
+import VSelect from './VSelect.vue'
+
+const SORT_OPTS = [
+  { value: 'path', label: '路径' },
+  { value: 'size_asc', label: '大小 ↑' },
+  { value: 'size_desc', label: '大小 ↓' },
+]
+const PER_PAGE_OPTS = [20, 40, 60, 100, 200].map((n) => ({ value: n, label: String(n) }))
 
 const isChar = computed(() => store.filter.sub === 'char')
 
@@ -104,6 +112,40 @@ async function onExportFiltered() {
   exporting.value = false
 }
 
+/* 勾选导出:当前展示的素材(非角色视图=本页,角色视图=全部) */
+const pageItems = computed(() => (isChar.value ? filtered.value : shown.value))
+
+async function onExportSelected() {
+  const paths = [...store.exportSel]
+  if (!paths.length) {
+    showToast('请先勾选要导出的素材', 'warn')
+    return
+  }
+  exporting.value = true
+  try {
+    await exportAssetsZip(paths)
+    showToast(`已导出 ${paths.length} 个素材`)
+  } catch (e) {
+    showToast('导出失败: ' + e.message, 'err')
+  }
+  exporting.value = false
+}
+
+const pageAllSelected = computed(() =>
+  pageItems.value.length > 0 && pageItems.value.every((a) => store.exportSel.includes(a.path)))
+
+function onToggleSelectAll() {
+  const paths = pageItems.value.map((a) => a.path)
+  const set = new Set(store.exportSel)
+  if (pageAllSelected.value) paths.forEach((p) => set.delete(p))
+  else paths.forEach((p) => set.add(p))
+  store.exportSel = [...set]
+}
+
+function onClearExportSel() {
+  store.exportSel = []
+}
+
 /* ------------------------------------------------------------ drop file */
 
 async function onDropFile(asset, file) {
@@ -129,30 +171,36 @@ async function onDropFile(asset, file) {
 
 <template>
   <div id="toolbar">
-    <span class="info">{{ infoText }}</span>
-    <button class="btn ghost small" :disabled="exporting || !filtered.length" @click="onExportFiltered">
-      {{ exporting ? '打包中…' : `导出 ${filtered.length} 个` }}
-    </button>
-    <span class="spacer" style="flex:1"></span>
-    <template v-if="!isChar">
-      <label class="ctl">排序
-        <select v-model="store.sort" @change="store.gridPage = 1">
-          <option value="path">路径</option>
-          <option value="size_asc">大小 ↑</option>
-          <option value="size_desc">大小 ↓</option>
-        </select>
+    <div class="grp">
+      <span class="info">{{ infoText }}</span>
+      <button class="btn ghost small" :disabled="exporting || !store.exportSel.length" @click="onExportSelected">
+        {{ exporting ? '打包中…' : `导出选中 ${store.exportSel.length} 个` }}
+      </button>
+      <button class="btn ghost small" :disabled="exporting || !filtered.length" @click="onExportFiltered">
+        {{ exporting ? '打包中…' : `导出全部 ${filtered.length} 个` }}
+      </button>
+      <label class="ctl" title="勾选/取消当前页全部素材">
+        <input type="checkbox" class="ctl-check" :checked="pageAllSelected" @change="onToggleSelectAll">
+        全选本页
       </label>
-      <label class="ctl">每页
-        <select v-model.number="store.perPage" @change="store.gridPage = 1">
-          <option v-for="n in [20, 40, 60, 100, 200]" :key="n" :value="n">{{ n }}</option>
-        </select>
-      </label>
-      <button class="btn ghost" :disabled="store.gridPage <= 1" @click="store.gridPage--">◀ 上一页</button>
-      <span class="info">{{ store.gridPage }} / {{ pages }}</span>
-      <button class="btn ghost" :disabled="store.gridPage >= pages" @click="store.gridPage++">下一页 ▶</button>
-      <input v-model="goto" type="text" class="goto" placeholder="页码" title="跳转到页码" @keydown.enter="jump">
-      <button class="btn ghost" @click="jump">跳</button>
-    </template>
+      <button v-if="store.exportSel.length" class="btn ghost small" @click="onClearExportSel">清空</button>
+    </div>
+    <div class="grp view">
+      <template v-if="!isChar">
+        <span class="sep"></span>
+        <label class="ctl">排序
+          <VSelect v-model="store.sort" :options="SORT_OPTS" @change="store.gridPage = 1" />
+        </label>
+        <label class="ctl">每页
+          <VSelect v-model="store.perPage" :options="PER_PAGE_OPTS" @change="store.gridPage = 1" />
+        </label>
+        <button class="btn ghost" :disabled="store.gridPage <= 1" @click="store.gridPage--">◀ 上一页</button>
+        <span class="info">{{ store.gridPage }} / {{ pages }}</span>
+        <button class="btn ghost" :disabled="store.gridPage >= pages" @click="store.gridPage++">下一页 ▶</button>
+        <input v-model="goto" type="text" class="goto" placeholder="页码" title="跳转到页码" @keydown.enter="jump">
+        <button class="btn ghost" @click="jump">跳</button>
+      </template>
+    </div>
   </div>
 
   <div id="grid">

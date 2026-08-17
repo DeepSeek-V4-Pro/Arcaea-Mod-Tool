@@ -4,11 +4,12 @@ Follows AOSP apksig:
   * content digest = chunked digest (0xa5-prefixed 1MiB chunks, 0x5a top level)
     over [zip prefix][central dir][EOCD with cd_offset rewritten to sb_offset]
   * signer block: signed data (digests|certs|attrs) + signatures + public key
-  * algorithm 0x0101: RSASSA-PKCS1-v1_5 with SHA-256 (max device compat)
+  * algorithm 0x0103: RSASSA-PKCS1-v1_5 with SHA-256 (widest device compat;
+    0x0101/0x0102 are RSASSA-PSS, 0x0103/0x0104 are PKCS1-v1_5 per the spec)
 
 The original Arcaea APK carries a v2 block only (no v3), so we sign v2 only.
-Verification re-implements the digest + signature checks locally (apksigtool's
-HASHERS table mislabels 0x0103, so we cannot rely on its verify for 0x0101).
+Verification re-implements the digest + signature checks locally and is
+cross-checked with apksigtool + the official apksig jar.
 """
 
 from __future__ import annotations
@@ -28,7 +29,8 @@ from .zipio import read_central_directory, EOCD_SIG
 
 V2_BLOCK_ID = 0x7109871A
 BLOCK_MAGIC = b"APK Sig Block 42"
-ALG_RSA_PKCS1_SHA256 = 0x0101
+# 0x0103 = RSASSA-PKCS1-v1_5 with SHA-256 (0x0101/0x0102 是 PSS,勿用)
+ALG_RSA_PKCS1_SHA256 = 0x0103
 CHUNK_SIZE = 1 << 20
 PREFIX_CHUNK = b"\xa5"
 PREFIX_TOP = b"\x5a"
@@ -83,13 +85,16 @@ def load_or_create_key(keydir: str | None = None) -> tuple[rsa.RSAPrivateKey, x5
 # ------------------------------------------------------------- digest math
 
 def chunked_digest(buf: bytes) -> bytes:
-    """AOSP chunked digest: 0xa5-prefixed chunk hashes, 0x5a top level."""
-    h = hashlib.sha256()
+    """AOSP chunked digest: 0xa5-prefixed 1MiB chunks, 0x5a top level.
+
+    顶层 = SHA-256(0x5a || 真实块数(uint32 LE) || 各块摘要按序拼接)。
+    块数不是 1,也不能先把块摘要哈希 —— 这两处都是旧实现踩过的坑。
+    """
+    digests = []
     for i in range(0, len(buf), CHUNK_SIZE):
         chunk = buf[i:i + CHUNK_SIZE]
-        h.update(hashlib.sha256(PREFIX_CHUNK + struct.pack("<I", len(chunk)) + chunk).digest())
-    top = h.digest()
-    return hashlib.sha256(PREFIX_TOP + struct.pack("<I", 1) + top).digest()
+        digests.append(hashlib.sha256(PREFIX_CHUNK + struct.pack("<I", len(chunk)) + chunk).digest())
+    return hashlib.sha256(PREFIX_TOP + struct.pack("<I", len(digests)) + b"".join(digests)).digest()
 
 
 def compute_content_digest(apk_path: str, prefix_end: int, cd_start: int,
@@ -98,8 +103,9 @@ def compute_content_digest(apk_path: str, prefix_end: int, cd_start: int,
 
     Signing (no block yet): prefix_end == cd_start == cd_offset.
     Verifying (block present): prefix_end = block start, cd_start = EOCD's
-    cd_offset (block lies between them and is excluded from the digest)."""
-    h = hashlib.sha256()
+    cd_offset (block lies between them and is excluded from the digest).
+    """
+    digests = []
     with open(apk_path, "rb") as f:
         for start, end in ((0, prefix_end), (cd_start, eocd_offset)):
             f.seek(start)
@@ -109,13 +115,14 @@ def compute_content_digest(apk_path: str, prefix_end: int, cd_start: int,
                 if not chunk:
                     break
                 remaining -= len(chunk)
-                h.update(hashlib.sha256(PREFIX_CHUNK + struct.pack("<I", len(chunk)) + chunk).digest())
+                digests.append(hashlib.sha256(
+                    PREFIX_CHUNK + struct.pack("<I", len(chunk)) + chunk).digest())
         f.seek(eocd_offset)
         eocd = f.read(eocd_size)
     eocd_patched = eocd[:16] + struct.pack("<I", prefix_end) + eocd[20:]
-    h.update(hashlib.sha256(PREFIX_CHUNK + struct.pack("<I", len(eocd_patched)) + eocd_patched).digest())
-    top = h.digest()
-    return hashlib.sha256(PREFIX_TOP + struct.pack("<I", 1) + top).digest()
+    digests.append(hashlib.sha256(
+        PREFIX_CHUNK + struct.pack("<I", len(eocd_patched)) + eocd_patched).digest())
+    return hashlib.sha256(PREFIX_TOP + struct.pack("<I", len(digests)) + b"".join(digests)).digest()
 
 
 # ------------------------------------------------------------ block builder

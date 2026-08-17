@@ -1,137 +1,57 @@
 # Arcaea Mod Tool
 
-本地改包工具:直接从 APK 中浏览、替换 **Arcaea** 的 2D 素材(立绘、曲绘、界面、背景、音符皮肤、音频、文本),并重新打包、签名生成可安装的 mod APK。
+本地改包工具：直接从 APK 中浏览、替换 **Arcaea** 的 2D 素材（立绘、曲绘、界面、背景、音符皮肤、音频、文本），并重新打包、签名生成可安装的 mod APK。
 
-- **不触碰** dex / lib / 资源表,只替换素材文件,风险低
-- **快**:重打包采用原始字节级拷贝(解析 zip 中央目录,只重压缩被替换的条目),1.8 GB 的 APK 无需全量解压
-- **纯本地**:所有数据保存在 `data/` 目录,不联网、不上传
-- **自签名**:内置纯 Python 的 APK v2 签名实现,自动生成/复用本地密钥
+> 项目仓库：<https://github.com/DeepSeek-V4-Pro/Arcaea-Mod-Tool>
+> 使用前请务必阅读 [免责声明与注意事项](docs/免责声明与注意事项.md)（涉及版权与法律风险）。
+
+## 功能特性
+
+- **不触碰 dex / lib / 资源表**，只替换素材文件，风险低
+- **快**：重打包采用原始字节级拷贝（解析 zip 中央目录，只重压缩被替换的条目），1.8 GB 的 APK 无需全量解压
+- **智能图片处理**：自动裁切校准（按原素材比例铺满）、联机立绘半身裁切+底部淡出、头像菱形蒙版、缩放/拉伸/转 JPG
+- **纯本地**：所有数据保存在本机 `data/` 目录，不联网、不上传
+- **自签名**：内置纯 Python 的 APK v2 签名实现，自动生成/复用本地密钥
+- **开箱即用**：`start.bat` 自动创建虚拟环境、安装依赖、构建前端、识别原包
 
 ## 快速开始
 
 ```bat
-:: 一键安装(创建 .venv 并安装依赖,然后自动启动)
-scripts\install.bat
-
-:: 或手动
-python -m venv .venv
-.venv\Scripts\pip install -r requirements.txt
+:: 1. 把原版 APK 放入 input/ 目录（自动识别，无需配置路径）
+:: 2. 双击运行
 start.bat
 ```
 
-启动后浏览器访问 <http://127.0.0.1:8000>(端口可用环境变量 `AMT_PORT` 覆盖)。
+启动后浏览器自动打开 <http://127.0.0.1:8000>（端口可用环境变量 `AMT_PORT` 覆盖）。
 
-> 首次使用请在「配置」页填写 APK 文件路径,然后点「扫描」建立素材目录。
+> 详细的使用教程见 [说明文档](docs/说明文档.md)。
 
-## 使用流程
+## 文档
 
-1. **扫描**:读取 APK 中央目录,建立素材索引(仅 2D 图片 + 可读文本/音频,数秒完成)
-2. **替换**:在素材网格中点选条目,拖入新文件即可;图片支持缩放 / 拉伸保持原尺寸 / 转 JPG 等处理预览;文本类文件可在线编辑
-3. **构建**:自动执行「重打包 → v2 签名 → 自校验」,输出到 `data/output/`
-4. **补丁包**:可导出 / 导入 mod pack zip,便于分享与备份
+| 文档 | 适合谁 | 内容 |
+|---|---|---|
+| [说明文档](docs/说明文档.md) | 普通用户 | 安装、替换流程、图片处理详解、常见问题 |
+| [结构原理说明](docs/结构原理说明.md) | 开发者/研究者 | 架构设计、原包读取、重打包、签名、API |
+| [免责声明与注意事项](docs/免责声明与注意事项.md) | 所有人 | 版权、法律、技术风险（详细） |
+| [更新日志](CHANGELOG.md) | 所有人 | 版本记录 |
 
 ## 目录结构
 
 ```
 arcaea-mod-tool/
-├── app/                  # FastAPI 应用层
-│   ├── main.py           # 应用工厂 + 入口(python -m app)
-│   ├── config.py         # 路径布局 + settings.json 读写
-│   ├── state.py          # 进程内状态(目录缓存、构建任务表)
-│   ├── deps.py           # 路由共享依赖
-│   ├── mime.py           # Content-Type 猜测
-│   └── routes/           # 按业务域拆分的路由
-│       ├── assets.py     # 扫描 / 目录 / 资源读取
-│       ├── patches.py    # 补丁 CRUD / 图片处理 / 文本编辑
-│       ├── build.py      # 构建任务
-│       ├── packs.py      # 补丁包导入导出
-│       └── config.py     # 配置读写
-├── core/                 # 引擎层(与 Web 无关,可独立测试)
-│   ├── zipio.py          # zip 解析 / 原始字节级重打包
-│   ├── catalog.py        # 素材目录与分类规则
-│   ├── patches.py        # 补丁存储(sha1 命名 blob + 元数据)
-│   ├── builder.py        # 构建流水线(后台线程 + 进度)
-│   └── signing.py        # APK v2 签名 / 校验(纯 Python)
-├── webui/                # 前端(Vue 3 + Vite:src/ 源码,dist/ 构建产物)
-├── scripts/install.bat   # 一键安装(venv + 依赖 + 启动)
-├── start.bat             # 启动脚本
-├── data/                 # 运行时数据(不入库,见 .gitignore)
-│   ├── settings.json     # 用户配置(APK 路径、输出目录)
-│   ├── patches/          # 补丁内容与元数据
-│   ├── thumbs/           # 缩略图缓存
-│   ├── keystore/         # 签名密钥(自动生成)
-│   ├── output/           # 构建产物
-│   └── packs/            # 补丁包
-└── requirements.txt
+├── app/                  # FastAPI 应用层（路由/状态/配置）
+├── core/                 # 引擎层（zip 解析、重打包、签名、补丁存储）
+├── webui/                # 前端（Vue 3 + Vite）
+├── input/                # 原包放置目录（放入 *.apk 自动识别）
+├── data/                 # 运行时数据（补丁/缩略图/输出/密钥，不入库）
+├── scripts/install.bat   # 一键安装（可选，start.bat 已含此逻辑）
+├── start.bat             # 一键启动（自愈式：自动装依赖/构建前端/开浏览器）
+├── requirements.txt
+└── docs/                 # 文档
 ```
-
-## 开发
-
-```bat
-.venv\Scripts\python -m app          :: 启动后端(等价于 start.bat)
-.venv\Scripts\python -m py_compile app core -q   :: Python 语法检查
-```
-
-约定:
-
-- 应用层(`app/`)负责 HTTP 与进程状态,引擎层(`core/`)负责纯逻辑,`core/` 不依赖 FastAPI
-- 所有路径基于项目根目录推导,不依赖当前工作目录
-- API 变更请同步更新 `app/main.py` 顶部注释与 README
-
-## 前端(Vue 3 + Vite)
-
-前端源码在 `webui/src/`,构建产物输出到 `webui/dist/`,由后端 `/static` 挂载提供。
-`start.bat` 会在检测到 `dist` 缺失且本机有 Node 时自动构建。
-
-```bat
-:: 构建(普通使用只需要这一步)
-cd webui
-npm install
-npm run build
-
-:: 开发模式:热更新,API 自动代理到 http://127.0.0.1:8000
-npm run dev        :: 打开 http://127.0.0.1:5173
-```
-
-结构:
-
-```
-webui/
-├── index.html          # Vite 入口
-├── vite.config.js      # 开发代理 / 构建 base 配置
-└── src/
-    ├── main.js         # 挂载入口
-    ├── App.vue         # 外壳:页面导航(解包/替换) + 配置弹窗
-    ├── api.js          # fetch 封装
-    ├── store.js        # 全局响应式状态(页面/目录/补丁/构建)
-    ├── toast.js        # 全局提示(ok/err/warn 堆叠)
-    ├── utils.js        # 工具函数
-    ├── style.css       # 全局样式(暂保持浅色主题)
-    ├── pages/
-    │   ├── ExtractPage.vue  # 解包页(初始):素材浏览/预览/导出
-    │   └── ReplacePage.vue  # 替换页:补丁清单确认 → 构建导出新包
-    └── components/
-        ├── AppHeader.vue   # 头部:页面导航/状态/扫描/配置
-        ├── Sidebar.vue     # 搜索 + 分类
-        ├── AssetGrid.vue   # 工具栏(导出/排序/分页) + 素材网格
-        ├── AssetCard.vue   # 素材卡片(拖放替换)
-        ├── DetailPanel.vue # 素材详情/导出/图片处理/文本编辑
-        ├── Dropzone.vue    # 通用拖放区
-        ├── PatchList.vue   # 替换清单(勾选启用/导入导出补丁包)
-        ├── PatchDetail.vue # 补丁对比预览(原素材 vs 替换内容)
-        ├── BuildPanel.vue  # 构建进度/日志/下载 APK
-        ├── ConfigDialog.vue# 配置弹窗
-        └── ToastHost.vue   # 全局提示
-```
-
-后端 API 补充:
-
-- `GET  /api/asset/download?path=`      单个素材下载
-- `POST /api/assets/export`             按路径列表批量导出 zip(body: {"paths": [...]})
-- `POST /api/patch/enabled`             启用/停用补丁(停用的不参与构建)
-- `GET  /api/output/download?path=`     下载构建产物(限输出目录内)
 
 ## 说明
 
-- 生成的 mod APK 使用本地自签名证书,与官方包签名不同;安装前需卸载原版
-- 修改素材为纯本地行为;修改 songlist / characters.json 等数据类文件请自行承担风险
+- 生成的 mod APK 使用本地自签名证书，与官方包签名不同；安装前需卸载原版（注意先备份游戏存档）
+- 修改素材为纯本地行为；修改 songlist / characters.json 等数据类文件请自行承担风险
+- 本项目未提供开源许可证，默认保留所有权利；仅允许个人学习研究使用，请勿用于商业或分发用途

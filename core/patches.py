@@ -118,9 +118,110 @@ class PatchStore:
     # -------------------------------------------------------------- image processing
 
     @staticmethod
+    def _apply_bottom_fade(img: Image.Image, fade: float = 0.25) -> Image.Image:
+        """底部渐变透明(垂直均匀淡出),模拟官方联机立绘的人物截断效果。
+
+        实测官方 *_mp.png:内容至约 70% 高度处开始半透明,线性淡出到 88%
+        处全透明,以下全空。这里对画布底部 fade 比例做 1->0 线性 alpha 渐变。
+        """
+        w, h = img.size
+        if img.mode != "RGBA" or h <= 1:
+            return img
+        fade = max(0.05, min(0.9, fade))
+        start = int(h * (1 - fade))
+        if start >= h - 1:
+            return img
+        col = Image.new("L", (1, h), 255)
+        for y in range(start, h):
+            t = (h - 1 - y) / (h - 1 - start)  # 1 -> 0
+            col.putpixel((0, y), max(0, min(255, int(round(255 * t)))))
+        mask = col.resize((w, h), Image.Resampling.BILINEAR)
+        _, _, _, alpha = img.split()
+        out = img.copy()
+        out.putalpha(Image.composite(alpha, Image.new("L", (w, h), 0), mask))
+        return out
+
+    @staticmethod
+    def _apply_diamond_mask(img: Image.Image) -> Image.Image:
+        """套用内切菱形 alpha 蒙版(顶点在四边中点,与 Arcaea 官方头像一致)。
+
+        官方头像素材本身就是"正方形画布 + 菱形镂空"的 RGBA 图(四角全透明),
+        直接替换成实心方块图会在游戏里穿帮;此蒙版把替换图裁成同样的菱形。
+        仅对带 alpha 的图生效,RGB 图先建一个菱形 alpha 通道。
+        """
+        w, h = img.size
+        if w <= 0 or h <= 0:
+            return img
+        mask = Image.new("L", (w, h), 0)
+        px = mask.load()
+        # 逐像素解析判定内切菱形(避免多边形光栅化把顶点像素裁掉):
+        #   |2x-(w-1)|/w + |2y-(h-1)|/h <= 1  (整数交叉相乘)
+        den = w * h
+        for y in range(h):
+            dy = abs(2 * y - (h - 1)) * w
+            for x in range(w):
+                if abs(2 * x - (w - 1)) * h + dy <= den:
+                    px[x, y] = 255
+        if img.mode == "RGBA":
+            _, _, _, alpha = img.split()
+            new_alpha = Image.composite(alpha, Image.new("L", (w, h), 0), mask)
+            out = img.copy()
+            out.putalpha(new_alpha)
+            return out
+        if img.mode == "RGB":
+            out = img.convert("RGBA")
+            out.putalpha(mask)
+            return out
+        return img
+
+    @staticmethod
+    def _crop_to_aspect(img: Image.Image, tw: int, th: int, align: str = "center") -> Image.Image:
+        """裁切到目标宽高比 tw/th,不拉伸变形。
+
+        align: 'center' 居中裁切 | 'top' 保留顶部 | 'bottom' 保留底部。
+        若比例已一致或目标尺寸未知则原样返回。
+        """
+        w, h = img.size
+        if tw <= 0 or th <= 0 or w <= 0 or h <= 0:
+            return img
+        target = tw / th
+        cur = w / h
+        if abs(cur - target) < 1e-4:
+            return img
+        if cur > target:
+            # 太宽:裁掉左右
+            nw = max(1, min(w, int(round(h * target))))
+            if align == "top":
+                x = 0
+            elif align == "bottom":
+                x = w - nw
+            else:
+                x = (w - nw) // 2
+            return img.crop((x, 0, x + nw, h))
+        # 太高:裁掉上下
+        nh = max(1, min(h, int(round(w / target))))
+        if align == "top":
+            y = 0
+        elif align == "bottom":
+            y = h - nh
+        else:
+            y = (h - nh) // 2
+        return img.crop((0, y, w, y + nh))
+
+    @staticmethod
     def process_image(data: bytes, orig_ext: str, settings: dict) -> bytes:
-        """Resize / convert before storing. settings keys:
-        keep_size (bool), scale (float), quality (int 1-100), fmt ('png'|'jpg')"""
+        """Resize / crop / convert before storing. settings keys:
+        keep_size (bool), scale (float), quality (int 1-100), fmt ('png'|'jpg'),
+        fit ('crop'), fit_align ('center'|'top'|'bottom'),
+        fit_zone (0<z<1: 联机立绘半身裁切,先保留源图顶部 z 再适配并底部淡出),
+        shape ('diamond'|'none'|'auto' — 路由层按素材路径解析,菱形头像自动识别),
+        orig_w / orig_h (原素材像素尺寸,由路由层提供)。
+
+        处理优先级: fit 裁切校准 > keep_size 拉伸 > scale 缩放。
+        fit='crop' 时先按原素材宽高比裁切(align 控制保留区域),再缩放到
+        原素材精确尺寸 —— 铺满不变形;keep_size 为无比例校正的纯拉伸。
+        shape='diamond' 时最后套内切菱形蒙版(匹配官方头像镂空形状)。
+        """
         img = Image.open(io.BytesIO(data))
         img = img.convert("RGBA" if img.mode in ("RGBA", "LA", "P", "PA") else "RGB")
         fmt = (settings.get("fmt") or "png").lower()
@@ -129,15 +230,31 @@ class PatchStore:
         if fmt in ("jpg", "jpeg"):
             fmt = "jpg"
 
-        if settings.get("keep_size"):
+        ow = settings.get("orig_w")
+        oh = settings.get("orig_h")
+        if settings.get("fit") == "crop" and ow and oh:
+            # 联机立绘(半身)裁切:先保留源图顶部 fit_zone 比例(头部+胸肩),
+            # 再裁到原素材比例 -> 缩放到原素材精确尺寸 -> 底部渐变淡出
+            zone = settings.get("fit_zone")
+            is_bust = bool(zone) and 0 < zone < 1
+            if is_bust:
+                h = max(1, int(round(img.height * zone)))
+                img = img.crop((0, 0, img.width, h))
+            img = PatchStore._crop_to_aspect(img, ow, oh, settings.get("fit_align") or "center")
+            img = img.resize((ow, oh), Image.LANCZOS)
+            if is_bust and fmt == "png":
+                img = PatchStore._apply_bottom_fade(img)
+        elif settings.get("keep_size"):
             # stretch to original dimensions if known
-            ow = settings.get("orig_w")
-            oh = settings.get("orig_h")
             if ow and oh:
                 img = img.resize((ow, oh), Image.LANCZOS)
         elif settings.get("scale") and settings["scale"] not in (1, 100):
             s = settings["scale"] / 100.0
             img = img.resize((max(1, int(img.width * s)), max(1, int(img.height * s))), Image.LANCZOS)
+
+        if settings.get("shape") == "diamond" and fmt == "png":
+            # 头像菱形蒙版(JPG 无 alpha,跳过)
+            img = PatchStore._apply_diamond_mask(img)
 
         buf = io.BytesIO()
         if fmt == "png":

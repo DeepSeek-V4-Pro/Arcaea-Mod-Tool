@@ -6,8 +6,24 @@ import { downloadAsset, refreshPatches, removePatch, store, uploadPatch } from '
 import { showToast } from '../toast'
 import { b64toBlob, debounce, enc, fmtSize, isImageName, readFileAsDataURL } from '../utils'
 import Dropzone from './Dropzone.vue'
+import VSelect from './VSelect.vue'
+
+const ALIGN_OPTS = [
+  { value: 'center', label: '居中' },
+  { value: 'top', label: '顶部（适合立绘/头像，保留头部）' },
+  { value: 'bottom', label: '底部' },
+]
+const FMT_OPTS = [
+  { value: 'png', label: 'PNG（保留透明）' },
+  { value: 'jpg', label: 'JPG（更小）' },
+]
 
 const asset = computed(() => store.assets.find((a) => a.path === store.selected) || null)
+
+/* 头像素材:官方即为菱形镂空,应用处理时自动套菱形蒙版 */
+const isIcon = computed(() => !!asset.value && /^assets\/char\/.*_icon\.png$/i.test(asset.value.path))
+/* 联机立绘:半身构图,自动上部裁切 + 底部渐变淡出 */
+const isMp = computed(() => !!asset.value && /^assets\/char\/[^/]*_mp\.png$/i.test(asset.value.path))
 
 const patch = computed(() => (store.selected ? store.patches[store.selected] : null))
 const subLabel = computed(() => asset.value ? (store.subLabels[asset.value.sub] || asset.value.sub) : '')
@@ -36,10 +52,14 @@ async function onDownload() {
 /* ------------------------------------------------ 图片替换对话框(组件内局部状态) */
 
 const img = reactive({ name: '', dataUrl: '', preview: '', hasImage: false })
-const opts = reactive({ keepSize: false, scale: 100, fmt: 'png', quality: 90 })
+const opts = reactive({ keepSize: false, scale: 100, fmt: 'png', quality: 90, fitCrop: false, fitAlign: 'center' })
 
 function settingsPayload() {
   const s = {}
+  if (opts.fitCrop) {
+    s.fit = 'crop'
+    s.fit_align = opts.fitAlign
+  }
   if (opts.keepSize) s.keep_size = true
   if (opts.scale !== 100) s.scale = opts.scale
   if (opts.fmt !== 'png') s.fmt = opts.fmt
@@ -261,13 +281,20 @@ watch(() => store.incoming, consumeIncoming)
               <img class="pv-img" :src="img.preview">
             </div>
           </div>
-          <label class="set"><input v-model="opts.keepSize" type="checkbox"> 保持原始尺寸（拉伸）</label>
-          <label class="set">缩放 %<input v-model.number="opts.scale" type="number" min="1" max="400"></label>
+          <label class="set-row"><input v-model="opts.keepSize" type="checkbox"> 保持原始尺寸（拉伸）</label>
+          <label class="set-row"><input v-model="opts.fitCrop" type="checkbox"> 自动裁切校准（按原素材比例裁切并铺满，不变形）</label>
+          <div v-if="isIcon" class="pv-meta" style="margin-top:4px">
+            头像素材：应用后自动套用菱形蒙版（匹配官方镂空形状），请将主体放在画面中央。
+          </div>
+          <div v-if="isMp && opts.fitCrop" class="pv-meta" style="margin-top:4px">
+            联机立绘：将自动按原图上部约 55% 裁出半身构图，并在截断处加渐变透明效果。
+          </div>
+          <label v-if="opts.fitCrop" class="set">裁切保留位置
+            <VSelect v-model="opts.fitAlign" :options="ALIGN_OPTS" />
+          </label>
+          <label v-if="!opts.fitCrop" class="set">缩放 %<input v-model.number="opts.scale" type="number" min="1" max="400"></label>
           <label class="set">输出格式
-            <select v-model="opts.fmt">
-              <option value="png">PNG（保留透明）</option>
-              <option value="jpg">JPG（更小）</option>
-            </select>
+            <VSelect v-model="opts.fmt" :options="FMT_OPTS" />
           </label>
           <label v-if="opts.fmt === 'jpg'" class="set">JPG 质量<input v-model.number="opts.quality" type="number" min="1" max="100"></label>
           <button class="btn primary" style="width:100%" @click="applyImage">应用此图片替换</button>

@@ -31,7 +31,7 @@ SUBS = [
     ("char", "角色立绘"),
     ("bg", "曲目背景"),
     ("song_jacket", "曲目曲绘"),
-    ("particle", "音符皮肤"),
+    ("particle", "音符/轨道皮肤"),
     ("model", "模型贴图"),
     ("startup", "启动画面"),
     ("story_cg", "剧情 CG"),
@@ -42,7 +42,7 @@ SUBS = [
     ("ui_results", "结算界面"),
     ("ui_world", "世界模式"),
     ("ui_multiplayer", "联机界面"),
-    ("ui_dialog", "对话框"),
+    ("ui_dialog", "剧情对话界面"),
     ("ui_other", "其他界面"),
     ("misc", "杂项图片"),
 ]
@@ -113,16 +113,32 @@ def _sub_of_image(path: str) -> str:
         return "ui_layout"
     if low.startswith("assets/app-data/story/"):
         return "story_cg" if "/cg/" in low else "story_ui"
+    # img/story/ 下是剧情选择界面(actselect)等界面图,不是 CG
     if low.startswith("assets/img/story/"):
-        return "story_cg" if low.count("/") >= 4 else "story_ui"
+        return "story_ui"
     if low.startswith(("assets/img/epilogue/", "assets/img/finale/")):
         return "story_cg"
     if low.startswith("assets/img/"):
         parts = low.split("/")
+        # 音符/轨道皮肤:img/ 根目录与 img/1080/ 下的散件
+        if (len(parts) == 3 or (len(parts) == 4 and parts[2] == "1080")) and _is_note_skin(low):
+            return "particle"
         if len(parts) >= 3 and parts[2] in IMG_UI_DIRS:
             return IMG_UI_DIRS[parts[2]]
         return "ui_other"
     return "misc"
+
+
+# 游戏内音符/轨道皮肤文件名前缀(与 particle/ 同属一类,散落在 img/ 与 img/1080/)
+_NOTE_SKIN_PREFIXES = (
+    "note", "track", "arc_", "redline", "lane_",
+    "air_input", "approach_arrow", "touch_effect", "red_air_line",
+)
+
+
+def _is_note_skin(low: str) -> bool:
+    base = os.path.basename(low)
+    return base.startswith(_NOTE_SKIN_PREFIXES)
 
 
 @dataclass

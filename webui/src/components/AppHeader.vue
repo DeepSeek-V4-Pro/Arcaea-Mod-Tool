@@ -28,21 +28,23 @@ async function onScan() {
     <div class="logo">♪</div>
     <div class="title-wrap">
       <h1>Arcaea <span>Mod Tool</span></h1>
-      <p id="apk-label">📦 {{ store.cfgApk || '未配置 APK 路径' }}</p>
+      <p id="apk-label" :title="store.cfgApk || '未配置 APK 路径'">📦 {{ store.cfgApk || '未配置 APK 路径' }}</p>
     </div>
 
-    <!-- 页面导航 -->
-    <nav class="nav">
-      <button :class="{ active: store.page === 'extract' }" @click="store.page = 'extract'">解包</button>
-      <button :class="{ active: store.page === 'replace' }" @click="store.page = 'replace'">
-        替换<span v-if="patchCount" class="nav-badge">{{ patchCount }}</span>
-      </button>
-    </nav>
+    <div class="hdr-right">
+      <!-- 页面导航 -->
+      <nav class="nav">
+        <button :class="{ active: store.page === 'extract' }" @click="store.page = 'extract'">解包</button>
+        <button :class="{ active: store.page === 'replace' }" @click="store.page = 'replace'">
+          替换<span v-if="patchCount" class="nav-badge">{{ patchCount }}</span>
+        </button>
+      </nav>
 
-    <div class="status" :class="{ ok: store.statusOk }">
-      <span class="dot"></span><span id="status-text">{{ store.statusText }}</span>
+      <div class="status" :class="{ ok: store.statusOk }" :title="store.statusText">
+        <span class="dot"></span><span id="status-text">{{ store.statusText }}</span>
+      </div>
+      <button class="btn ghost" :disabled="scanning" @click="onScan">扫描</button>
+      <button class="btn ghost" @click="emit('open-config')">配置</button>
     </div>
-    <button class="btn ghost" :disabled="scanning" @click="onScan">扫描</button>
-    <button class="btn ghost" @click="emit('open-config')">配置</button>
   </header>
 </template>

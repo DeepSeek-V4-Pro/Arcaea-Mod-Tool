@@ -12,6 +12,7 @@ const emit = defineEmits(['drop-file'])
 const broken = ref(false)
 const dragOver = ref(false)
 const patched = computed(() => !!store.patches[props.asset.path])
+const checked = computed(() => store.exportSel.includes(props.asset.path))
 
 function shortName(path) {
   return path.startsWith('assets/songs/')
@@ -27,14 +28,22 @@ function onDrop(e) {
 function select() {
   store.selected = props.asset.path
 }
+
+function onToggleCheck() {
+  const i = store.exportSel.indexOf(props.asset.path)
+  if (i >= 0) store.exportSel.splice(i, 1)
+  else store.exportSel.push(props.asset.path)
+}
 </script>
 
 <template>
-  <div class="card" :class="{ patched, dragover: dragOver }" :data-path="asset.path"
+  <div class="card" :class="{ patched, selected: checked, 'has-sel': store.exportSel.length, dragover: dragOver }" :data-path="asset.path"
        @click="select"
        @dragover.prevent="dragOver = true"
        @dragleave="dragOver = false"
        @drop.prevent.stop="onDrop">
+    <input type="checkbox" class="check" :checked="checked" title="勾选后导出"
+           @click.stop @change="onToggleCheck">
     <img v-if="!broken && asset.preview === 'image'" class="thumb" loading="lazy"
          :src="`/api/asset/thumb?path=${enc(asset.path)}&max=256&v=${THUMB_VERSION}`"
          :alt="asset.path" @error="broken = true">

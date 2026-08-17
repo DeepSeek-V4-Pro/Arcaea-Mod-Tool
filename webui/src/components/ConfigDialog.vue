@@ -39,7 +39,7 @@ async function save() {
       <div class="modal-title">配置</div>
       <div class="cfg-row">
         <label>APK 文件路径</label>
-        <input v-model="apk" type="text">
+        <input v-model="apk" type="text" placeholder="留空时自动识别项目 input/ 目录中的原包">
       </div>
       <div class="cfg-row">
         <label>输出目录</label>
@@ -49,9 +49,10 @@ async function save() {
         保存并重新扫描
       </button>
       <div class="pv-meta" style="margin-top:12px">
-        1. 修改 2D 素材/音频/文本为纯本地行为,不触发服务器检测。<br>
-        2. 构建会生成重新签名(v2)的 APK,卸载原版后安装即可。<br>
-        3. 本工具不触碰 dex / lib / 资源表,只替换素材。
+        1. 快速开始:把原版 APK 放进项目 <b>input/</b> 目录,工具自动识别,无需手填路径。<br>
+        2. 修改 2D 素材/音频/文本为纯本地行为,不触发服务器检测。<br>
+        3. 构建会生成重新签名(v2)的 APK,卸载原版后安装即可。<br>
+        4. 本工具不触碰 dex / lib / 资源表,只替换素材。
       </div>
     </div>
   </div>

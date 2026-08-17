@@ -13,7 +13,10 @@ router = APIRouter(tags=["config"])
 
 @router.get("/api/config")
 def get_config(state: AppState = Depends(get_state)):
-    return state.settings
+    """返回配置;apk_path 为「生效路径」(配置缺失时自动解析 input/ 目录)。"""
+    out = dict(state.settings)
+    out["apk_path"] = app_config.resolve_apk(out.get("apk_path") or "")
+    return out
 
 
 @router.put("/api/config")
