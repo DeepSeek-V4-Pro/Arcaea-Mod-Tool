@@ -1,0 +1,20 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+
+# ---- 运行时数据(APK 路径、补丁、缩略图、签名密钥等,勿提交) ----
+data/*
+!data/.gitkeep
+
+# ---- 构建产物 ----
+data/output/
+*.apk
+
+# ---- 编辑器 / 系统 ----
+.idea/
+.vscode/
+Thumbs.db
+Desktop.ini

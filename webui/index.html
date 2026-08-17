@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arcaea Mod Tool</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo">♪</div>
+    <div class="title-wrap">
+      <h1>Arcaea <span>Mod Tool</span></h1>
+      <p id="apk-label">正在初始化…</p>
+    </div>
+    <div class="status" id="status"><span class="dot"></span><span id="status-text">就绪</span></div>
+    <button class="btn ghost" id="btn-scan">扫描</button>
+    <button class="btn ghost" id="btn-export">导出补丁包</button>
+    <button class="btn ghost" id="btn-import">导入</button>
+    <input type="file" id="import-file" accept=".zip" hidden>
+    <button class="btn ghost" id="btn-cfg">配置</button>
+  </header>
+  <main>
+    <aside>
+      <div class="filter"><input id="search" placeholder="搜索素材路径…"></div>
+      <div class="cats" id="cats"></div>
+    </aside>
+    <section id="browser">
+      <div id="toolbar">
+        <span class="info" id="tb-info">加载中…</span>
+        <span class="spacer" style="flex:1"></span>
+        <span class="info" id="tb-count"></span>
+      </div>
+      <div id="grid"></div>
+    </section>
+    <section id="panel">
+      <div class="tabs">
+        <button data-tab="detail" class="active">素材详情</button>
+        <button data-tab="build">构建</button>
+        <button data-tab="config">配置</button>
+      </div>
+      <div class="body" id="panel-body"></div>
+    </section>
+  </main>
+</div>
+<div id="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

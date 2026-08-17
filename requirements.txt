@@ -1,0 +1,12 @@
+# Web 框架
+fastapi>=0.110
+uvicorn>=0.27
+python-multipart>=0.0.9
+
+# 图片处理
+pillow>=10.0
+
+# APK 签名与校验
+cryptography>=42.0
+apksigtool==0.1.0
+apksigcopier>=1.1
