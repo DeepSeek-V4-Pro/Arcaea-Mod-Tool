@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 
 import { store } from '../store'
-import { enc } from '../utils'
+import { enc, THUMB_VERSION } from '../utils'
 
 const props = defineProps({
   asset: { type: Object, required: true },
@@ -36,7 +36,7 @@ function select() {
        @dragleave="dragOver = false"
        @drop.prevent.stop="onDrop">
     <img v-if="!broken && asset.preview === 'image'" class="thumb" loading="lazy"
-         :src="`/api/asset/thumb?path=${enc(asset.path)}&max=256`"
+         :src="`/api/asset/thumb?path=${enc(asset.path)}&max=256&v=${THUMB_VERSION}`"
          :alt="asset.path" @error="broken = true">
     <div v-else class="icon">🖼️</div>
     <div v-if="patched" class="badge">已替换</div>

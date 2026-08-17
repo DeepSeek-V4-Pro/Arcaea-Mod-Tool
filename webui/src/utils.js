@@ -1,5 +1,9 @@
 /* 通用工具函数 */
 
+/* 缩略图缓存版本:与后端 thumb 缓存 key 的 vN 前缀同步。
+   规则变化时 bump 此值,URL 随之变化,浏览器旧缓存(黑底图等)立即失效。 */
+export const THUMB_VERSION = 3
+
 export function enc(s) {
   return encodeURIComponent(s)
 }
