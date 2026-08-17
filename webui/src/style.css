@@ -132,7 +132,11 @@ section#browser{
 }
 .card{
   background:#fff;border:1px solid var(--line);border-radius:12px;
-  overflow:hidden;cursor:pointer;position:relative;transition:border .15s, box-shadow .15s;
+  /* 用 clip 而非 hidden:overflow:hidden 会让 grid 项变成滚动容器,
+     Chromium 的轨道尺寸计算会忽略其内容(行轨道塌成几像素,卡片互相重叠);
+     overflow:clip 同样裁剪圆角内容但不产生滚动容器,轨道正常 */
+  overflow:clip;
+  cursor:pointer;position:relative;transition:border .15s, box-shadow .15s;
 }
 .card:hover{border-color:var(--accent);box-shadow:0 6px 18px rgba(13,148,136,.14)}
 .card .thumb{width:100%;aspect-ratio:1;object-fit:cover;display:block;background:#f4fafb}
