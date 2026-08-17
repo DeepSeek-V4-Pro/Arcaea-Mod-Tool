@@ -143,7 +143,8 @@ class PatchStore:
         if fmt == "png":
             img.save(buf, "PNG", optimize=True)
         else:
-            bg = Image.new("RGB", img.size, (0, 0, 0))
+            # JPG 无透明通道:合成到白色底(黑底在浅色界面里太突兀)
+            bg = Image.new("RGB", img.size, (255, 255, 255))
             if img.mode == "RGBA":
                 bg.paste(img, mask=img.split()[3])
             else:

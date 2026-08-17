@@ -6,6 +6,7 @@ import io
 import os
 import uuid
 import zipfile
+import zlib
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import FileResponse, Response
@@ -80,16 +81,16 @@ def asset_thumb(path: str, max: int = 256, state: AppState = Depends(get_state))
     if e is None or os.path.splitext(path)[1].lower() not in THUMB_EXTS:
         raise HTTPException(404)
     os.makedirs(app_config.THUMB_DIR, exist_ok=True)
-    # v2: 缩略图从黑底改为浅色底合成,旧缓存作废
-    key = f"v2-{len(path)}-{path}-{e.usize}-{max}".replace("/", "_")
+    # v3: 缩略图透明区从浅青底改为纯白底,旧缓存作废
+    key = f"v3-{len(path)}-{path}-{e.usize}-{max}".replace("/", "_")
     cache = os.path.join(app_config.THUMB_DIR, key + ".jpg")
     if not os.path.exists(cache):
         data = read_entry_data(p, e)
         img = Image.open(io.BytesIO(data))
         img.thumbnail((max, max), Image.LANCZOS)
         if img.mode == "RGBA":
-            # 透明 PNG:合成到浅色底,避免转 RGB 时黑底
-            bg = Image.new("RGB", img.size, (244, 250, 251))
+            # 透明 PNG:合成到白色底,避免转 RGB 时黑底
+            bg = Image.new("RGB", img.size, (255, 255, 255))
             bg.paste(img, mask=img.split()[3])
             img = bg
         elif img.mode not in ("RGB", "L"):
@@ -133,7 +134,11 @@ def asset_download(path: str, state: AppState = Depends(get_state)):
 @router.post("/api/assets/export")
 def assets_export(body: dict, background_tasks: BackgroundTasks,
                   state: AppState = Depends(get_state)):
-    """批量导出:按素材路径列表打包 zip(保留 APK 内路径结构)。"""
+    """批量导出:按素材路径列表打包 zip(保留 APK 内路径结构)。
+
+    性能:按条目在 APK 内的偏移排序后单次顺序读取,避免每个条目都随机 seek。
+    个别读取失败的条目跳过,不中断整体导出。
+    """
     paths = body.get("paths") or []
     if not paths:
         raise HTTPException(400, "没有要导出的素材")
@@ -146,10 +151,22 @@ def assets_export(body: dict, background_tasks: BackgroundTasks,
     export_dir = os.path.join(app_config.DATA_DIR, "export")
     os.makedirs(export_dir, exist_ok=True)
     tmp = os.path.join(export_dir, f"assets_{uuid.uuid4().hex[:8]}.zip")
+    entries = sorted((entry_map[x] for x in paths), key=lambda e: e.header_offset)
     # 素材多为已压缩格式(png/jpg),直接存储避免无谓压缩
-    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED) as z:
-        for name in paths:
-            z.writestr(name, read_entry_data(p, entry_map[name]))
+    with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED) as z, open(p, "rb") as fin:
+        for e in entries:
+            try:
+                fin.seek(e.header_offset + 30 + e.local_fn_len + e.local_extra_len)
+                raw = fin.read(e.csize)
+                if e.method == 0:
+                    data = raw
+                elif e.method == 8:
+                    data = zlib.decompress(raw, -15)
+                else:
+                    continue  # 不支持的压缩方式,跳过
+            except Exception:
+                continue
+            z.writestr(e.name, data)
     background_tasks.add_task(os.remove, tmp)
     return FileResponse(tmp, media_type="application/zip",
                         headers={"Content-Disposition": 'attachment; filename="arcaea_assets.zip"'})
