@@ -52,7 +52,7 @@ rem remove legacy fallback marker (start.bat now maintains the venv itself)
 if exist ".venv\.fallback" del ".venv\.fallback" >nul 2>nul
 
 rem ---------- 4. dependencies ----------
-"%PY%" -c "import fastapi,uvicorn,PIL,cryptography" >nul 2>nul
+"%PY%" -c "import fastapi,uvicorn,PIL,cryptography,apksigtool,apksigcopier,python_multipart" >nul 2>nul
 if not errorlevel 1 (
     echo [3/3] Dependencies ready
     goto done

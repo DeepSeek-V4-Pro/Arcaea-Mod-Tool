@@ -47,7 +47,7 @@ if not exist ".venv\Scripts\python.exe" (
 )
 
 rem ---------- 4. dependencies: install if missing (CN mirrors first) ----------
-"%PY%" -c "import fastapi,uvicorn,PIL,cryptography" >nul 2>nul
+"%PY%" -c "import fastapi,uvicorn,PIL,cryptography,apksigtool,apksigcopier,python_multipart" >nul 2>nul
 if errorlevel 1 (
     echo [SETUP] Installing dependencies ^(mirrors auto-switch^)...
     for %%m in (https://pypi.tuna.tsinghua.edu.cn/simple https://mirrors.aliyun.com/pypi/simple/ https://pypi.org/simple) do (
