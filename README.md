@@ -52,7 +52,7 @@ arcaea-mod-tool/
 │   ├── patches.py        # 补丁存储(sha1 命名 blob + 元数据)
 │   ├── builder.py        # 构建流水线(后台线程 + 进度)
 │   └── signing.py        # APK v2 签名 / 校验(纯 Python)
-├── webui/                # 前端(无构建步骤:HTML/CSS/JS)
+├── webui/                # 前端(Vue 3 + Vite:src/ 源码,dist/ 构建产物)
 ├── scripts/install.bat   # 一键安装(venv + 依赖 + 启动)
 ├── start.bat             # 启动脚本
 ├── data/                 # 运行时数据(不入库,见 .gitignore)
@@ -68,8 +68,8 @@ arcaea-mod-tool/
 ## 开发
 
 ```bat
-.venv\Scripts\python -m app          :: 启动服务(等价于 start.bat)
-.venv\Scripts\python -m py_compile app core -q   :: 语法检查
+.venv\Scripts\python -m app          :: 启动后端(等价于 start.bat)
+.venv\Scripts\python -m py_compile app core -q   :: Python 语法检查
 ```
 
 约定:
@@ -77,6 +77,47 @@ arcaea-mod-tool/
 - 应用层(`app/`)负责 HTTP 与进程状态,引擎层(`core/`)负责纯逻辑,`core/` 不依赖 FastAPI
 - 所有路径基于项目根目录推导,不依赖当前工作目录
 - API 变更请同步更新 `app/main.py` 顶部注释与 README
+
+## 前端(Vue 3 + Vite)
+
+前端源码在 `webui/src/`,构建产物输出到 `webui/dist/`,由后端 `/static` 挂载提供。
+`start.bat` 会在检测到 `dist` 缺失且本机有 Node 时自动构建。
+
+```bat
+:: 构建(普通使用只需要这一步)
+cd webui
+npm install
+npm run build
+
+:: 开发模式:热更新,API 自动代理到 http://127.0.0.1:8000
+npm run dev        :: 打开 http://127.0.0.1:5173
+```
+
+结构:
+
+```
+webui/
+├── index.html          # Vite 入口
+├── vite.config.js      # 开发代理 / 构建 base 配置
+└── src/
+    ├── main.js         # 挂载入口
+    ├── App.vue         # 布局外壳(头部/侧栏/素材区/面板)
+    ├── api.js          # fetch 封装
+    ├── store.js        # 全局响应式状态(目录/补丁/构建)
+    ├── toast.js        # 全局提示
+    ├── utils.js        # 工具函数
+    ├── style.css       # 全局样式(暂保持浅色主题)
+    └── components/
+        ├── AppHeader.vue   # 头部:状态/扫描/补丁包
+        ├── Sidebar.vue     # 搜索 + 分类
+        ├── AssetGrid.vue   # 工具栏 + 素材网格(分页/角色分组)
+        ├── AssetCard.vue   # 素材卡片(拖放替换)
+        ├── DetailPanel.vue # 素材详情/图片处理/文本编辑
+        ├── Dropzone.vue    # 通用拖放区
+        ├── BuildPanel.vue  # 构建进度与日志
+        ├── ConfigPanel.vue # 配置
+        └── ToastHost.vue   # 全局提示
+```
 
 ## 说明
 

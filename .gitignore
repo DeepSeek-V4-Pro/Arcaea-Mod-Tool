@@ -5,6 +5,11 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 
+# ---- 前端 ----
+webui/node_modules/
+webui/dist/
+webui/.npm-cache/
+
 # ---- 运行时数据(APK 路径、补丁、缩略图、签名密钥等,勿提交) ----
 data/*
 !data/.gitkeep
