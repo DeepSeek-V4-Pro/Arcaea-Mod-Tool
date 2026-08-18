@@ -61,36 +61,43 @@ if errorlevel 1 (
 )
 :deps_ok
 
-rem ---------- 5. frontend: build if dist missing (requires Node.js) ----------
-if not exist "webui\dist\index.html" (
-    where node >nul 2>nul
-    if not errorlevel 1 (
-        echo [SETUP] Building frontend ^(first run takes 1-2 min^)...
-        pushd webui
-        if not exist "node_modules\vite\package.json" (
-            call npm install --no-audit --no-fund
-        )
-        call npm run build
-        popd
-        if not exist "webui\dist\index.html" (
-            echo [WARN] Frontend build failed. Backend API still works.
-            echo        Retry manually: cd webui ^&^& npm install ^&^& npm run build
-        )
-    ) else (
-        echo [WARN] Node.js not found, cannot build frontend.
-        echo        Install Node.js then run: cd webui ^&^& npm install ^&^& npm run build
+rem ---------- 5. frontend: rebuild every start (keeps dist in sync with src) ----------
+where node >nul 2>nul
+if not errorlevel 1 (
+    pushd webui
+    if not exist "node_modules\vite\package.json" (
+        echo [SETUP] Installing frontend dependencies ^(first run takes 1-2 min^)...
+        call npm install --no-audit --no-fund
     )
+    echo [BUILD] Building frontend ...
+    call npm run build >nul 2>nul
+    popd
+    if not exist "webui\dist\index.html" (
+        echo [WARN] Frontend build failed. Backend API still works.
+        echo        Retry manually: cd webui ^&^& npm install ^&^& npm run build
+    )
+) else (
+    echo [WARN] Node.js not found, cannot build frontend ^(using existing dist if any^).
+    echo        Install Node.js then run: cd webui ^&^& npm install ^&^& npm run build
 )
 
-rem ---------- 6. port conflict check ----------
-powershell -NoProfile -Command "if (Get-NetTCPConnection -LocalPort %PORT% -State Listen -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }" >nul 2>nul
-if not errorlevel 1 (
-    echo [INFO] Port %PORT% is already in use ^(server may already be running^).
+rem ---------- 6. port check: kill our own stale server, then start fresh ----------
+rem If the port is held by a previous instance of this tool (old code), kill it so
+rem "restart" always runs the latest code; if held by an unrelated program, just open browser.
+powershell -NoProfile -Command "$c = Get-NetTCPConnection -LocalPort %PORT% -State Listen -ErrorAction SilentlyContinue; if (-not $c) { 'FREE'; exit }; $p = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $c.OwningProcess); if ($p -and $p.CommandLine -like '*-m app*') { Stop-Process -Id $c.OwningProcess -Force -ErrorAction SilentlyContinue; 'STALE_KILLED' } else { 'FOREIGN' }" > "%TEMP%\amt_port_check.txt" 2>nul
+set /p PORT_STATE=<"%TEMP%\amt_port_check.txt"
+del "%TEMP%\amt_port_check.txt" >nul 2>nul
+if "%PORT_STATE%"=="FOREIGN" (
+    echo [INFO] Port %PORT% is in use by another program. Opening browser anyway...
     start http://127.0.0.1:%PORT%
-    echo Browser opened. Closing this window does not stop the server.
     echo This window will close automatically in 5 seconds...
     timeout /t 5 /nobreak >nul
     exit /b 0
+)
+if "%PORT_STATE%"=="STALE_KILLED" (
+    echo [INFO] Found a stale Arcaea Mod Tool server on port %PORT% ^(old code^).
+    echo        Killing it and starting with the latest code...
+    timeout /t 2 /nobreak >nul
 )
 
 rem ---------- 7. start backend in its own window ----------

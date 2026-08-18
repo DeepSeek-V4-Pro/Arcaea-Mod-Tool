@@ -219,6 +219,7 @@ def build_apk(
     replace: dict[str, bytes] | None = None,
     add: dict[str, bytes] | None = None,
     drop: set[str] | None = None,
+    drop_prefixes: list[str] | None = None,
     on_progress=None,
     deflate_level: int = 6,
 ) -> list[Entry]:
@@ -226,13 +227,17 @@ def build_apk(
     replace = replace or {}
     add = add or {}
     drop = drop or set()
+    drop_prefixes = drop_prefixes or []
 
     entries, _cd, _eocd = read_central_directory(src)
     existing_names = {e.name for e in entries}
     for k in replace:
         if k in add:
             raise ZipError(f"path '{k}' in both replace and add")
-    wanted = [e for e in entries if e.name not in drop]
+    wanted = [
+        e for e in entries
+        if e.name not in drop and not any(e.name.startswith(p) for p in drop_prefixes)
+    ]
     additions = [(k, v) for k, v in add.items() if k not in existing_names]
 
     plan: list[tuple[Entry | None, bytes | None, str]] = []

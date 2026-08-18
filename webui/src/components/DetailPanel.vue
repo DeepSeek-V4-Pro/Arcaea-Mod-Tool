@@ -20,10 +20,10 @@ const FMT_OPTS = [
 
 const asset = computed(() => store.assets.find((a) => a.path === store.selected) || null)
 
-/* 头像素材:官方即为菱形镂空,应用处理时自动套菱形蒙版 */
-const isIcon = computed(() => !!asset.value && /^assets\/char\/.*_icon\.png$/i.test(asset.value.path))
-/* 联机立绘:半身构图,自动上部裁切 + 底部渐变淡出 */
-const isMp = computed(() => !!asset.value && /^assets\/char\/[^/]*_mp\.png$/i.test(asset.value.path))
+/* 头像素材:官方即为菱形镂空,应用处理时自动套菱形蒙版(iOS 路径兼容) */
+const isIcon = computed(() => !!asset.value && /(?:^|\/)char\/[^/]*_icon\.png$/i.test(asset.value.path))
+/* 联机立绘:半身构图,自动上部裁切 + 底部渐变淡出(iOS 路径兼容) */
+const isMp = computed(() => !!asset.value && /(?:^|\/)char\/[^/]*_mp\.png$/i.test(asset.value.path))
 
 const patch = computed(() => (store.selected ? store.patches[store.selected] : null))
 const subLabel = computed(() => asset.value ? (store.subLabels[asset.value.sub] || asset.value.sub) : '')
@@ -241,7 +241,7 @@ watch(() => store.incoming, consumeIncoming)
     <div v-if="!asset" class="empty">点击左侧素材查看详情</div>
 
     <template v-else>
-      <div class="pv-title">{{ asset.path }}</div>
+      <div class="pv-title">{{ asset.rel || asset.path }}</div>
       <div class="pv-meta">
         {{ asset.human_size }} · {{ subLabel }}
         <template v-if="charInfo">

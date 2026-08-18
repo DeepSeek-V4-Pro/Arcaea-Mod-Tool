@@ -1,7 +1,9 @@
 """Asset catalog: 2D image assets only, with fine-grained sub-categories.
 
 Built from the central directory only (no extraction) in well under a second
-even for a 1.8GB APK. Sub-category rules follow the actual Arcaea layout:
+even for a 1.8GB APK. Sub-category rules follow the actual Arcaea layout
+(路径规则以 assets/ 为基准书写;iOS 模式由 build_catalog 先剥离
+Payload/<App>.app/ 根前缀,再走同一套规则,两平台分类结果一致):
 
   assets/char/<id>_mp.png      角色立绘       assets/char/<id>_icon.png   角色头像
   assets/char/<id>u_mp.png     觉醒立绘       assets/char/<id>u_icon.png  觉醒头像
@@ -153,6 +155,7 @@ class AssetInfo:
     human_size: str
     char_id: str = ""
     form: str = ""
+    rel: str = ""   # 剥离素材根前缀后的相对路径(展示用;path 仍是 zip 全路径,补丁键不变)
 
 
 def _fmt(n: int) -> str:
@@ -188,17 +191,19 @@ def _pick_display_name(search: list[str]) -> str:
     return best_s
 
 
-def load_char_names(apk_path: str, entries) -> dict:
+def load_char_names(pkg_path: str, entries, asset_root: str = "assets/") -> dict:
     """char_id(str) -> {"name": 罗马音, "label": 显示名, "search": 全部搜索串}。
 
-    数据来自 APK 内 assets/char/characters.json;文件缺失或解析失败时返回空表。
+    数据来自包内 <素材根>/char/characters.json(Android 为 assets/,
+    iOS 为 Payload/<App>.app/);文件缺失或解析失败时返回空表。
     """
+    target = asset_root + "char/characters.json"
     char_names: dict = {}
     for e in entries:
-        if e.name != CHAR_NAMES_FILE:
+        if e.name != target:
             continue
         try:
-            data = json.loads(read_entry_data(apk_path, e).decode("utf-8"))
+            data = json.loads(read_entry_data(pkg_path, e).decode("utf-8"))
             for c in data:
                 search = c.get("search_strings") or []
                 cid = str(c.get("character_id"))
@@ -213,8 +218,15 @@ def load_char_names(apk_path: str, entries) -> dict:
     return char_names
 
 
-def build_catalog(apk_path: str) -> dict:
-    entries, _cd, _eocd = read_central_directory(apk_path)
+def build_catalog(pkg_path: str, asset_root: str = "assets/") -> dict:
+    """构建素材目录。
+
+    asset_root: 素材树根前缀——Android 为 "assets/",iOS 为
+    "Payload/<App>.app/"(由调用方经 iosmode.detect_app_root 探测)。
+    条目若在素材根下,分类按「剥离根后的相对路径」判定(两平台规则一致);
+    path 字段始终是 zip 全路径,直接作为补丁键使用,构建时无需转换。
+    """
+    entries, _cd, _eocd = read_central_directory(pkg_path)
     assets = []
     sub_counts = {sid: 0 for sid, _ in SUBS}
     total_images = 0
@@ -224,17 +236,20 @@ def build_catalog(apk_path: str) -> dict:
         ext = os.path.splitext(e.name)[1].lower()
         if ext not in IMAGE_EXTS:
             continue  # 只保留 2D 图片素材
-        sub = _sub_of_image(e.name)
+        # 剥离素材根前缀;根外的条目按原名归类(通常落到 misc)
+        rel = e.name[len(asset_root):] if e.name.startswith(asset_root) else e.name
+        # 分类规则以 assets/ 为基准书写,这里合成回标准形态即可复用全部规则
+        sub = _sub_of_image("assets/" + rel)
         char_id, form = "", ""
         if sub == "char":
-            ci = char_info(e.name)
+            ci = char_info("assets/" + rel)
             if ci:
                 char_id, form = ci
         assets.append(AssetInfo(
             path=e.name, size=e.usize, csize=e.csize, method=e.method,
             category="image", sub=sub, preview="image",
             human_size=_fmt(e.usize),
-            char_id=char_id, form=form,
+            char_id=char_id, form=form, rel=rel,
         ))
         sub_counts[sub] = sub_counts.get(sub, 0) + 1
         total_images += 1
@@ -246,7 +261,8 @@ def build_catalog(apk_path: str) -> dict:
                  if sub_counts.get(sid)],
         "form_labels": FORM_LABELS,
         "form_order": FORM_ORDER,
-        "char_names": load_char_names(apk_path, entries),
+        "char_names": load_char_names(pkg_path, entries, asset_root),
+        "asset_root": asset_root,
         "assets": [a.__dict__ for a in assets],
     }
 

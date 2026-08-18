@@ -24,9 +24,11 @@ router = APIRouter(tags=["patches"])
 _orig_sizes: dict[tuple[str, str], tuple[int, int] | None] = {}
 
 # 官方头像素材 = 正方形画布 + 内切菱形镂空(四角透明)
-_ICON_RE = re.compile(r"^assets/char/.*_icon\.png$", re.IGNORECASE)
+# 注意:两平台路径不同(assets/char/... vs Payload/<App>.app/char/...),
+# 正则只匹配相对部分,兼容 Android / iOS 两种全路径形态。
+_ICON_RE = re.compile(r"(?:^|/)char/[^/]*_icon\.png$", re.IGNORECASE)
 # 联机立绘:半身构图 + 底部渐变透明(截断处淡出)
-_MP_RE = re.compile(r"^assets/char/[^/]*_mp\.png$", re.IGNORECASE)
+_MP_RE = re.compile(r"(?:^|/)char/[^/]*_mp\.png$", re.IGNORECASE)
 # 联机立绘取源图顶部比例(实测官方 ≈ 原立绘上部 55%)
 _MP_ZONE = 0.55
 
@@ -36,10 +38,12 @@ def _resolve_shape(path: str, settings: dict) -> dict:
 
     shape: 'diamond'(菱形头像蒙版) | 'none' | 缺省(auto 识别)。
     fit_zone: 联机立绘自动半身裁切(0<z<1,源图顶部比例),显式给 1 可禁用。
+    注意:必须用 search 而非 match——路径是 zip 全路径(assets/... 或
+    Payload/<App>.app/...),match 会从字符串开头锚定导致永远匹配不上。
     """
-    if "shape" not in settings and _ICON_RE.match(path):
+    if "shape" not in settings and _ICON_RE.search(path):
         settings["shape"] = "diamond"
-    if "fit_zone" not in settings and _MP_RE.match(path):
+    if "fit_zone" not in settings and _MP_RE.search(path):
         settings["fit_zone"] = _MP_ZONE
     return settings
 

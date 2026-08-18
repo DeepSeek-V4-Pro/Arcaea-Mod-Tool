@@ -19,6 +19,8 @@ API 一览:
   GET  /api/build/{id}           job snapshot
   POST /api/pack/export          export mod pack zip
   POST /api/pack/import          import mod pack zip
+  GET  /api/lab/status           实验功能控制台状态(iOS 模式等)
+  POST /api/lab/platform         切换平台模式(android | ios)
 
 启动方式:  python -m app   (端口可用环境变量 AMT_PORT 覆盖,默认 8000)
 """
@@ -34,7 +36,7 @@ from fastapi.staticfiles import StaticFiles
 from core.patches import PatchStore
 
 from . import config
-from .routes import assets, build, config as config_route, packs, patches
+from .routes import assets, build, config as config_route, lab, packs, patches
 from .state import AppState
 
 
@@ -59,6 +61,7 @@ def create_app() -> FastAPI:
     app.include_router(patches.router)
     app.include_router(build.router)
     app.include_router(packs.router)
+    app.include_router(lab.router)
 
     web_root = _web_root()
     if web_root:
@@ -78,6 +81,11 @@ def create_app() -> FastAPI:
             )
             return HTMLResponse(hint)
 
+    # 文档目录(实验功能控制台等处的帮助链接)
+    docs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs")
+    if os.path.isdir(docs_dir):
+        app.mount("/docs", StaticFiles(directory=docs_dir), name="docs")
+
     return app
 
 
@@ -88,6 +96,12 @@ def main() -> None:
     import uvicorn
 
     port = int(os.environ.get("AMT_PORT", "8000"))
+    print("============================================")
+    print("  Arcaea Mod Tool - 免费开源")
+    print("  开源仓库: https://github.com/DeepSeek-V4-Pro/Arcaea-Mod-Tool")
+    print("  基于 GNU GPL v3.0 协议, 可自由使用 / 修改 / 分发")
+    print("============================================")
+    print()
     print(f"Arcaea Mod Tool → http://127.0.0.1:{port}")
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 

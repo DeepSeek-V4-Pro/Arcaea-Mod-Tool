@@ -8,6 +8,7 @@ const emit = defineEmits(['open-config'])
 
 const scanning = ref(false)
 const patchCount = computed(() => Object.keys(store.patches).length)
+const isIos = computed(() => store.platform === 'ios')
 
 async function onScan() {
   scanning.value = true
@@ -28,7 +29,10 @@ async function onScan() {
     <div class="logo">♪</div>
     <div class="title-wrap">
       <h1>Arcaea <span>Mod Tool</span></h1>
-      <p id="apk-label" :title="store.cfgApk || '未配置 APK 路径'">📦 {{ store.cfgApk || '未配置 APK 路径' }}</p>
+      <p id="apk-label" :title="(store.pkgDisplay || store.cfgApk || '未配置原包路径') + (store.pkgNote ? ' · ' + store.pkgNote : '')">
+        {{ isIos ? '🍎' : '📦' }} {{ store.pkgDisplay || store.cfgApk || (isIos ? '未配置 IPA 路径' : '未配置 APK 路径') }}
+        <span v-if="isIos" class="ios-badge">iOS 实验</span>
+      </p>
     </div>
 
     <div class="hdr-right">
@@ -38,6 +42,7 @@ async function onScan() {
         <button :class="{ active: store.page === 'replace' }" @click="store.page = 'replace'">
           替换<span v-if="patchCount" class="nav-badge">{{ patchCount }}</span>
         </button>
+        <button :class="{ active: store.page === 'lab' }" @click="store.page = 'lab'">实验</button>
       </nav>
 
       <div class="status" :class="{ ok: store.statusOk }" :title="store.statusText">

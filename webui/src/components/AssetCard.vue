@@ -14,10 +14,12 @@ const dragOver = ref(false)
 const patched = computed(() => !!store.patches[props.asset.path])
 const checked = computed(() => store.exportSel.includes(props.asset.path))
 
-function shortName(path) {
-  return path.startsWith('assets/songs/')
-    ? path.slice('assets/songs/'.length)
-    : path.split('/').slice(-2).join('/')
+function shortName() {
+  // 展示相对路径(iOS 模式剥掉 Payload/<App>.app/ 前缀);补丁键仍是全路径
+  const p = props.asset.rel || props.asset.path
+  return p.startsWith('songs/')
+    ? p.slice('songs/'.length)
+    : p.split('/').slice(-2).join('/')
 }
 
 function onDrop(e) {
@@ -50,6 +52,6 @@ function onToggleCheck() {
     <div v-else class="icon">🖼️</div>
     <div v-if="patched" class="badge">已替换</div>
     <div class="size">{{ asset.human_size }}</div>
-    <div class="name" :title="asset.path">{{ shortName(asset.path) }}</div>
+    <div class="name" :title="asset.path">{{ shortName() }}</div>
   </div>
 </template>

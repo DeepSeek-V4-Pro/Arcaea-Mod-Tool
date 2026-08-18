@@ -15,7 +15,7 @@ from core.catalog import find_entry
 from core.zipio import read_central_directory, read_entry_data
 
 from .. import config as app_config
-from ..deps import get_state, need_apk
+from ..deps import get_state, need_apk, need_pick
 from ..mime import guess_mime
 from ..state import AppState
 
@@ -27,13 +27,16 @@ THUMB_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 
 @router.post("/api/scan")
 def scan(state: AppState = Depends(get_state)):
-    cat = state.scan(need_apk(state))
-    return {"ok": True, "total": cat["total"], "sub_counts": cat["sub_counts"]}
+    pick = need_pick(state)
+    cat = state.scan(pick["path"], pick["platform"])
+    return {"ok": True, "total": cat["total"], "sub_counts": cat["sub_counts"],
+            "platform": pick["platform"], "pkg_source": pick["source"]}
 
 
 @router.get("/api/catalog")
 def catalog(state: AppState = Depends(get_state)):
-    return state.get_catalog(need_apk(state))
+    pick = need_pick(state)
+    return state.get_catalog(pick["path"], pick["platform"])
 
 
 @router.get("/api/asset/raw")

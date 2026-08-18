@@ -123,10 +123,14 @@ class PatchStore:
 
         实测官方 *_mp.png:内容至约 70% 高度处开始半透明,线性淡出到 88%
         处全透明,以下全空。这里对画布底部 fade 比例做 1->0 线性 alpha 渐变。
+        输入为 RGB(用户拖入的 JPG / 无 alpha PNG)时先补全透明通道,否则
+        渐变无处施加,半身效果会静默失效。
         """
         w, h = img.size
-        if img.mode != "RGBA" or h <= 1:
+        if h <= 1:
             return img
+        if img.mode != "RGBA":
+            img = img.convert("RGBA")
         fade = max(0.05, min(0.9, fade))
         start = int(h * (1 - fade))
         if start >= h - 1:

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
 from .. import config as app_config
-from ..deps import get_state, need_apk
+from ..deps import get_state, need_pick
 from ..state import AppState
 
 router = APIRouter(tags=["build"])
@@ -16,8 +16,8 @@ router = APIRouter(tags=["build"])
 
 @router.post("/api/build")
 def start_build(state: AppState = Depends(get_state)):
-    apk = need_apk(state)
-    job = state.start_build(apk)
+    pick = need_pick(state)
+    job = state.start_build(pick["path"], pick["platform"])
     return {"job_id": job.id}
 
 
@@ -40,6 +40,10 @@ def output_download(path: str, state: AppState = Depends(get_state)):
         inside = False
     if not inside or not os.path.isfile(p):
         raise HTTPException(400, "路径不在输出目录内")
-    return FileResponse(p, media_type="application/vnd.android.package-archive",
+    if p.lower().endswith(".ipa"):
+        media = "application/octet-stream"
+    else:
+        media = "application/vnd.android.package-archive"
+    return FileResponse(p, media_type=media,
                         headers={"Content-Disposition":
                                  f'attachment; filename="{os.path.basename(p)}"'})

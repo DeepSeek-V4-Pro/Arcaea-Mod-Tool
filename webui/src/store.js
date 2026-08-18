@@ -7,8 +7,11 @@ import { downloadBlob } from './utils'
 import { showToast } from './toast'
 
 export const store = reactive({
-  // 页面导航:extract(解包页) | replace(替换页)
+  // 页面导航:extract(解包页) | replace(替换页) | lab(实验功能控制台)
   page: 'extract',
+
+  // 平台模式:android(默认) | ios(实验性)
+  platform: 'android',
 
   // 素材目录
   catalog: null,
@@ -36,6 +39,8 @@ export const store = reactive({
   // 配置
   cfgApk: '',
   cfgOut: '',
+  pkgDisplay: '',           // 原包展示路径(input/ 自动识别时为文件名,zip 时为外层路径)
+  pkgNote: '',              // 原包解析说明(如自动跟随平台)
 
   // 状态栏
   statusOk: false,
@@ -54,6 +59,18 @@ export function setStatus(ok, text) {
   store.statusText = text
 }
 
+/* ---------------------------------------------------------------- config */
+
+/** 拉取配置并同步到 store(原包路径 / 输出目录 / 生效平台 / 来源展示)。 */
+export async function refreshConfig() {
+  const cfg = await api('/api/config')
+  store.cfgApk = cfg.apk_path || ''
+  store.cfgOut = cfg.output_dir || ''
+  store.platform = cfg.platform || 'android'
+  store.pkgDisplay = cfg.pkg_display || cfg.apk_path || ''
+  store.pkgNote = cfg.pkg_note || ''
+}
+
 /* ---------------------------------------------------------------- catalog */
 
 export async function loadCatalog() {
@@ -67,12 +84,47 @@ export async function loadCatalog() {
   store.formOrder = cat.form_order || []
   store.charNames = cat.char_names || {}
   store.gridPage = 1
+  // 目录刷新(重新扫描/切换平台/更换原包)后,旧筛选与选中项全部失效,统一重置,
+  // 避免残留旧平台的分类筛选导致素材网格空白或旧选中态误指向。
+  store.filter.sub = null
+  store.filter.search = ''
+  store.selected = null
+  store.selPatch = null
+  store.exportSel = []
 }
 
 export async function scan() {
   const r = await api('/api/scan', { method: 'POST' })
   await loadCatalog()
   return r
+}
+
+/* ---------------------------------------------------------------- lab */
+
+/** 切换平台模式(android | ios);切换后自动重新扫描并跳转解包页展示新目录。 */
+export async function setPlatform(p) {
+  await api('/api/lab/platform', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ platform: p }),
+  })
+  store.platform = p
+  store.buildJob = null
+  try {
+    await loadCatalog()
+  } catch (e) {
+    // 切换后无可用原包(如 input/ 缺少对应类型):清空目录,避免残留旧平台素材造成误导
+    store.catalog = null
+    store.assets = []
+    store.subs = []
+    store.subLabels = {}
+    store.charNames = {}
+    store.selected = null
+    store.selPatch = null
+    store.exportSel = []
+    throw e
+  }
+  store.page = 'extract'   // 自动刷新页面:直接展示切换后平台的素材目录
 }
 
 /* ---------------------------------------------------------------- patches */
