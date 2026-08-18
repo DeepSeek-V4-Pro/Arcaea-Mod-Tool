@@ -2,7 +2,7 @@
 
 本项目遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
-## [1.1.0]
+## [1.1.0] - 2026-08-18
 
 **iOS 实验模式（实验性）。** 新增「实验」控制台页，可在 Android / iOS 平台间切换；
 iOS 模式复用现有引擎完成 解包浏览 → 替换素材 → 重打包，产出未签名 IPA。
